@@ -2,6 +2,8 @@ import numpy as np
 import random
 import torch
 
+torch.cuda.empty_cache()
+
 from pacman_module.pacman import runGame
 from pacman_module.ghostAgents import SmartyGhost
 
@@ -13,12 +15,14 @@ SEED = 42
 random.seed(SEED)
 np.random.seed(SEED)
 
-path_to_saved_model = ".pth"
+path_to_saved_model = "pacman_model.pth"
+torch.manual_seed(SEED)
 
-# Feel free to add code here depending on your implementation
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-model = PacmanNetwork()
-model.load_state_dict(torch.load(path_to_saved_model, map_location="cpu"))
+model = PacmanNetwork().to(device)
+state_dict = torch.load(path_to_saved_model, map_location=device)
+model.load_state_dict(state_dict)
 model.eval()
 
 pacman_agent = PacmanAgent(model)

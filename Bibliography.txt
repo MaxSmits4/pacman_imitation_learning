@@ -1,0 +1,58 @@
+BIBLIOGRAPHY:
+
+
+[1] Ioffe, S., & Szegedy, C. (2015).
+    Batch Normalization: Accelerating Deep Network Training.
+    ICML, Vol. 37, pp. 448-456.
+    https://arxiv.org/abs/1502.03167
+
+    Why we choose BatchNorm:
+    It stabilizes training by normalizing values between each layer.
+    Allows higher learning rates and faster convergence.Easier for us to not care about initialization.
+
+    Citation (Abstract - last sentence):
+    "Batch Normalization allows us to use much higher learning rates
+    and be less careful about initialization."
+
+
+[2] Hendrycks, D., & Gimpel, K. (2016).
+    Gaussian Error Linear Units (GELUs).
+    https://arxiv.org/abs/1606.08415
+
+    Why we choose GELU:
+    Smooth activation that weights inputs by value (not by sign like ReLU).
+    Better performance across vision, NLP, and speech tasks.
+
+    Citation (Abstract - second sentence):
+    "The GELU nonlinearity weights inputs by their value, rather than
+    gates inputs by their sign as in ReLUs."
+
+
+[3] Srivastava, N., Hinton, G., et al. (2014).
+    Dropout: A Simple Way to Prevent Neural Networks from Overfitting.
+    Journal of Machine Learning Research, Vol. 15(1), pp. 1929-1958.
+    https://jmlr.org/papers/v15/srivastava14a.html
+
+    Why we choose Dropout:
+    Prevents overfitting by randomly dropping neurons during training.
+    Forces the network to learn robust, distributed representations.
+
+    Citation (Abstract - first paragraph):
+    "The key idea is to randomly drop units (along with their connections)
+    from the neural network during training. This prevents units from
+    co-adapting too much."
+
+
+[4] Kingma, D. P., & Ba, J. (2015).
+    Adam: A Method for Stochastic Optimization.
+    ICLR. https://arxiv.org/abs/1412.6980
+
+    Why we choose Adam:
+    Adapts learning rates automatically for each parameter.
+    Efficient, requires little tuning, works well with noisy gradients.
+
+    Citation (Abstract - advantages section):
+    "straightforward to implement, is computationally efficient, has little
+    memory requirements, is invariant to diagonal rescaling of the gradients,
+    and is well suited for problems that are large in terms of data and/or
+    parameters."
