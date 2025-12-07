@@ -1,5 +1,5 @@
 """
-2.architecture.py - Optimized Neural Network for Pacman Imitation Learning
+2. architecture.py - Neural Network Architecture for Pacman Imitation Learning
 """
 
 import torch
@@ -8,60 +8,44 @@ import torch.nn as nn
 
 class PacmanNetwork(nn.Module):
     """
-    Optimized MLP to imitate the expert Pacman player.
+    MLP for predicting Pacman actions from game state.
+    """
 
-        - Input: 23 features (restored critical features)
-        - Output: 5 logits (one per action)
-        - Architecture: 23 → 128 → 64 → 32 → 5
-        - Activation: GELU (smooth, modern, used in GPT/BERT)
-        - Regularization: Dropout(0.15) + BatchNorm
-
-    Design rationale:
-        - 23 features includes CRITICAL danger signals (ghost_adjacent, danger_level)
-        - 3 hidden layers: sufficient capacity without overfitting
-        - 128 neurons first layer (~5.5x input, good ratio)
-        - GELU activation: smoother gradients than ReLU, better performance
-        - Dropout 0.15: regularization without being too aggressive
-        - BatchNorm: training stability
-        - ~13,000 parameters: sweet spot for 15k training examples (VERIFIED: larger models overfit!)
-  """
-
-    def __init__(self):
+    def __init__(
+        self,
+        input_features=23,
+        num_actions=5,
+        hidden_dims=[128, 64, 32],
+        activation=nn.GELU()
+    ):
         super().__init__()
 
-        # Architecture: Linear → BatchNorm → GELU → Dropout 
-        # Layer ordering inspired by Ioffe & Szegedy (2015) [1]
-        self.net = nn.Sequential(
-            # First hidden layer: 23 → 128
-            nn.Linear(23, 128),
-            nn.BatchNorm1d(128),  # [1] BatchNorm
-            nn.GELU(),            # [2] GELU
-            nn.Dropout(0.15),     # [3] Dropout
+        layers = []
 
-            # Second hidden layer: 128 → 64
-            nn.Linear(128, 64),
-            nn.BatchNorm1d(64),   
-            nn.GELU(),            
-            nn.Dropout(0.15),     
+        # Input layer: 23 → 128
+        layers.append(nn.Linear(input_features, hidden_dims[0]))
+        layers.append(nn.BatchNorm1d(hidden_dims[0]))  # Normalize activations
+        layers.append(activation)
+        layers.append(nn.Dropout(0.15))  # Prevent overfitting
 
-            # Third hidden layer: 64 → 32
-            nn.Linear(64, 32),
-            nn.BatchNorm1d(32),  
-            nn.GELU(),           
-            nn.Dropout(0.15),    
+        # Hidden layers: 128 → 64 → 32
+        for i in range(len(hidden_dims) - 1):
+            layers.append(nn.Linear(hidden_dims[i], hidden_dims[i + 1]))
+            layers.append(nn.BatchNorm1d(hidden_dims[i + 1]))
+            layers.append(activation)
+            layers.append(nn.Dropout(0.15))
 
-            # Output layer: 32 → 5 (no activation - CrossEntropyLoss expects raw logits)
-            nn.Linear(32, 5)
-        )
+        # Output layer: 32 → 5 (no activation, raw logits)
+        layers.append(nn.Linear(hidden_dims[-1], num_actions))
+
+        self.net = nn.Sequential(*layers)
+        self.criterion = nn.CrossEntropyLoss()  # Multi-class classification loss
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Forward pass through the network.
-
-        Args:
-            x: Tensor of shape (batch_size, 23) - normalized features
-
-        Returns:
-            Tensor of shape (batch_size, 5) - logits for each action
-        """
+        """Forward pass: features → logits"""
         return self.net(x)
+
+    def loss(self, features: torch.Tensor, actions: torch.Tensor) -> torch.Tensor:
+        """Compute cross-entropy loss for training"""
+        pred_actions = self.forward(features)
+        return self.criterion(pred_actions, actions)

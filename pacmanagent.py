@@ -1,65 +1,61 @@
 """
-4.pacmanagent.py
+4. pacmanagent.py - Use trained MLP to predict expert actions during gameplay
 """
 
 import torch
-from pacman_module.game import Agent
+from pacman_module.game import Agent, Directions
 from data import state_to_tensor, INDEX_TO_ACTION
 
 
 class PacmanAgent(Agent):
     """
-    Pacman agent that uses a neural network to decide actions
-
-    The agent does imitation learning: it predicts the action that
-    the expert would have taken in each state
-
-    Args:
-        model: Trained PacmanNetwork
+    Neural network agent for Pacman.
+    Predicts actions by passing game state through trained MLP.
     """
 
     def __init__(self, model):
         """
-        Initialize agent with a trained model
+        Initialize agent with trained model.
 
-        Args:
-            model: PacmanNetwork trained on expert data
+        Arguments:
+            model: Trained PacmanNetwork instance
         """
         super().__init__()
-        self.model = model.eval()  # Evaluation mode thus disables dropout
+        self.model = model
+        self.model.eval()  # Disable dropout/batchnorm
 
     def get_action(self, state):
         """
-        Choose the best action for the current state.
+        Predict best legal action for current game state.
 
-        1. Get legal actions
-        2. Convert GameState to feature tensor
-        3. Pass tensor through network
-        4. Return the best LEGAL action
+        Process:
+        1. Convert GameState to 23 features
+        2. Forward pass through network
+        3. Return highest-scoring legal action
 
-        Args:
-            state: GameState object representing game state
+        Arguments:
+            state: GameState object
 
         Returns:
-            Direction (NORTH, SOUTH, EAST, WEST or STOP)
+            Direction (NORTH/SOUTH/EAST/WEST/STOP)
         """
-
-            # 1. Legal actions (some directions may be blocked by walls)
+        # Get legal moves (walls block some directions)
         legal_actions = state.getLegalPacmanActions()
 
-            # 2. Convert GameState to feature tensor
-            # unsqueeze(0) adds batch dimension: shape becomes (1, 23)
-        x = state_to_tensor(state).unsqueeze(0)
+        # Convert state to tensor (23 features)
+        x = state_to_tensor(state).unsqueeze(0)  # Add batch dimension
 
-            # 3. Forward pass through the network
-        with torch.no_grad():  # No gradients needed faster - bc only prediction here
-            logits = self.model(x)[0]  # Get predictions, remove batch dimension
-            probs = torch.softmax(logits, dim=0)  # Convert to probabilities [0,1]
-            sorted_indices = torch.argsort(probs, descending=True).tolist()  # Sort by probability
+        # Predict action probabilities
+        with torch.no_grad():  # No gradient tracking for inference
+            logits = self.model(x)[0]  # Remove batch dimension
+            probs = torch.softmax(logits, dim=0)  # Convert to probabilities
+            sorted_indices = torch.argsort(probs, descending=True).tolist()  # Sort by confidence
 
-            # 4. Return best LEGAL action
+        # Return best legal action
         for i in sorted_indices:
             action = INDEX_TO_ACTION[i]
             if action in legal_actions:
                 return action
+
+        return Directions.STOP  # Fallback
 

@@ -7,11 +7,12 @@ PARTIE 1 : Vue d'ensemble
    Depuis un dataset de paires (GameState, action)
    et on veut entraîner un réseau de neurones à prédire quelle action l'expert aurait pris.
 
-   Ordre de lecture : ici les 4 fichiers qu'on a modifié 
+   Ordre de lecture : ici les 5 fichiers qu'on a modifié
    1. data.py - Convertit GameState en 23 features
    2. architecture.py - Définit le réseau MLP (23 → 128 → 64 → 32 → 5)
-   3. train.py - Entraîne le modèle
-   4. pacmanagent.py - Utilise le modèle pour jouer
+   3. train.py - Entraîne le modèle (avec plotting.py pour les graphiques)
+   4. plotting.py - Fonctions de visualisation (graphiques loss & accuracy)
+   5. pacmanagent.py - Utilise le modèle pour jouer
 
 
    Quick summary de chaque fichier :
@@ -20,14 +21,24 @@ PARTIE 1 : Vue d'ensemble
    La partie la plus importante. On transforme le GameState en 23 features :
    position, ghosts, food, géométrie du labyrinthe, danger, actions légales.
    Tout est normalisé pour que le réseau converge bien.
+   Inspiré des techniques de prétraitement utilisées dans MNIST [5].
 
    architecture.py (Réseau de neurones)
    MLP simple : 23 → 128 → 64 → 32 → 5 (3 couches cachées)
    Pattern par couche : Linear → BatchNorm → GELU → Dropout(0.15)
+   Architecture similaire aux MLPs classiques pour la classification (voir MNIST [5]).
 
    train.py (Entraînement)
-   Split train/validation 80/20, Adam optimizer, 50 epochs.
-   On sauvegarde le meilleur modèle selon val_accuracy.
+   Split train/test 80/20, Adam optimizer, 32 epochs, batch_size=256.
+   Utilise CrossEntropyLoss pour classification multi-classe (5 actions).
+   Évaluation finale sur le test set avec calcul de l'accuracy.
+   Code modulaire : imports depuis plotting.py pour les visualisations.
+
+   plotting.py (Visualisation - nouveau fichier)
+   Fonctions dédiées pour les graphiques live pendant l'entraînement.
+   setup_training_plots() → initialise les figures (loss + accuracy).
+   update_training_plots() → met à jour les graphiques en temps réel.
+   Séparation claire : tout le code matplotlib est isolé ici.
 
    pacmanagent.py (Agent)
    Utilise le modèle entraîné pour jouer.
@@ -40,10 +51,11 @@ PARTIE 1 : Vue d'ensemble
    │   ├── pacman_dataset.pkl    → 15018 paires (state, action) de l'expert
    │   └── pacman_test.pkl       → États de jeu sans actions pour Gradescope
    ├── pacman_module/            → Moteur de jeu (NE PAS MODIFIER)
-   ├── 1.data.py                 → Feature engineering + Dataset
-   ├── 2.architecture.py         → Réseau de neurones
-   ├── 3.train.py                → Boucle d'entraînement
-   ├── 4.pacmanagent.py          → Agent qui joue
+   ├── data.py                   → Feature engineering + Dataset
+   ├── architecture.py           → Réseau de neurones (MLP)
+   ├── train.py                  → Boucle d'entraînement (code modulaire)
+   ├── plotting.py               → Visualisation (loss & accuracy) [NOUVEAU]
+   ├── pacmanagent.py            → Agent qui joue
    ├── run.py                    → Visualisation du jeu
    ├── write_submission.py       → Génération du CSV
    ├── pacman_model.pth          → Poids du modèle entraîné
@@ -138,38 +150,66 @@ PARTIE 2 : Data.py - Feature Engineering
 PARTIE 3 : Architecture (architecture.py)
 
    Pourquoi un MLP et pas un CNN ?
-   Les CNN sont faits pour les images 2D où les pixels voisins sont liés.
+   Les CNN sont faits pour les images 2D où les pixels voisins sont liés (ex: MNIST [5]).
    Notre input est un vecteur (je dirais même un tenseur!) 1D de 23 features sans relation spatiale,
-   donc un MLP est le bon choix.
+   donc un MLP est le bon choix - similaire aux architectures fully-connected classiques.
 
    Structure : 23 → 128 → 64 → 32 → 5
 
    Pour chaque couche cachée ici 3: Linear → BatchNorm → GELU → Dropout
 
    1. Linear : transforme les données (multiplication matricielle + biais)
-   2. BatchNorm : normalise les valeurs entre couches (stabilise l'entraînement)
-   3. GELU : activation smooth, meilleure que ReLU, la meilleur que j'ai trouver, testez d'autre
-   4. Dropout : prévient l'overfitting
+   2. BatchNorm [1] : normalise les valeurs entre couches (stabilise l'entraînement)
+   3. GELU [2] : activation smooth, meilleure que ReLU, la meilleur que j'ai trouver, testez d'autre
+   4. Dropout [3] : prévient l'overfitting (p=0.15)
    5. Pas d'activation finale : CrossEntropyLoss veut des logits bruts
 
    Pourquoi GELU et pas ReLU ?
-   GELU est plus smooth (pas de coupure brutale à 0),
+   GELU [2] est plus smooth (pas de coupure brutale à 0),
    meilleur flow de gradients, utilisé dans GPT et BERT.
 
 
-PARTIE 4 : Entraînement (train.py)
+PARTIE 4 : Entraînement (train.py) + Visualisation (plotting.py)
 
-   Pipeline :
+   Pipeline (train.py) :
    1. Charger le dataset (15018 échantillons)
-   2. Split train/validation (80%/20%)
-   3. Entraîner pendant 50 epochs
-   4. Sauvegarder le meilleur modèle
+   2. Split train/test (80%/20%) avec random_split
+   3. Entraîner pendant 32 epochs avec visualisation
+   4. Évaluer sur test set et sauvegarder le modèle
 
-   Hyperparamètres :
-   - batch_size = 128  → Bon équilibre vitesse/stabilité
-   - epochs = 50       → Assez pour converger
-   - lr = 1e-3         → Learning rate standard pour Adam
-   - val_ratio = 0.2   → 20% pour validation
+   Hyperparamètres optimisés :
+   - batch_size = 256  → Augmenté pour meilleure stabilité et vitesse
+   - epochs = 32       → Réduit car convergence plus rapide avec batch_size plus grand
+   - lr = 1e-3         → Learning rate standard pour Adam [4]
+   - test_ratio = 0.2  → 20% pour évaluation finale
+   - show_every = 8    → Fréquence de visualisation des plots
+
+   Modifications importantes :
+   - Utilisation de tqdm/trange pour progression en temps réel
+   - Visualisation interactive de la loss + accuracy pendant l'entraînement
+   - Évaluation du test set à chaque epoch
+   - Checkpointing : sauvegarde automatique du meilleur modèle basé sur test accuracy
+
+   Architecture modulaire (nouveau design) :
+   - train.py → contient UNIQUEMENT la logique d'entraînement
+   - plotting.py → contient TOUTES les fonctions matplotlib
+   - evaluate_model() → fonction dédiée pour évaluer l'accuracy sur le test set
+   - Code PEP 8 conforme, lisible, maintenable
+
+   Visualisation (plotting.py) :
+   Deux fonctions principales qui gèrent tous les graphiques :
+
+   1. setup_training_plots(num_plots)
+      - Crée une fenêtre unique avec grille de subplots
+      - Loss plots à gauche (Epoch 0, 8, 16, 24, Final)
+      - Accuracy plot à droite (courbe continue)
+      - Retourne (fig, axes, ax_acc)
+
+   2. update_training_plots(axes, ax_acc, plot_idx, losses, ...)
+      - Met à jour les graphiques en temps réel
+      - Gère les mises à jour périodiques (toutes les 8 epochs)
+      - Gère la mise à jour finale (is_final=True)
+      - Refresh automatique avec plt.pause()
 
 
    Loss function : CrossEntropyLoss
@@ -272,13 +312,16 @@ PARTIE 4 : Entraînement (train.py)
             C'est pour ça qu'on n'a PAS besoin de mettre Softmax à la fin du réseau :
             CrossEntropyLoss s'attend à recevoir des logits bruts et fait le reste.
 
-   Optimizer : Adam
+   Optimizer : Adam [4]
    Adam est le choix par défaut pour le deep learning car il adapte
    le learning rate par paramètre et converge rapidement.
+   Fonctionne bien avec notre architecture inspirée des MLPs classiques (MNIST [5]).
 
-      Checkpointing :
-      On sauvegarde le modèle avec la meilleure val_accuracy, pas le dernier,
-      pour éviter de garder un modèle overfit.
+      Checkpointing - Sauvegarde du meilleur modèle :
+      À chaque epoch, on évalue l'accuracy sur le test set.
+      Si l'accuracy actuelle > meilleure accuracy précédente, on sauvegarde le modèle.
+      Cela garantit qu'on garde le modèle qui généralise le mieux, pas le dernier
+      (qui pourrait avoir overfitté). Le modèle est sauvegardé dans pacman_model.pth.
 
 
 PARTIE 5 : Agent (pacmanagent.py)
@@ -286,7 +329,15 @@ PARTIE 5 : Agent (pacmanagent.py)
    Juste lire le .py suffit
 
 
-PARTIE 6 : Questions possibles à l'oral - FAQ 
+PARTIE 6 : Questions possibles à l'oral - FAQ
+
+   Q: Pourquoi avoir séparé train.py et plotting.py ?
+   R: Séparation des responsabilités (design pattern fondamental).
+   train.py s'occupe UNIQUEMENT de l'entraînement (logique métier).
+   plotting.py s'occupe UNIQUEMENT de la visualisation (présentation).
+   Avantages : code plus lisible, testable, maintenable, réutilisable.
+   Si on veut changer les graphiques, on modifie juste plotting.py.
+   Code PEP 8 conforme avec lignes < 79 caractères.
 
    Q: Pourquoi un MLP et pas un CNN?
    R: Les CNN sont faits pour les images 2D où les pixels voisins sont liés.
@@ -302,8 +353,9 @@ PARTIE 6 : Questions possibles à l'oral - FAQ
    Utilisé dans GPT, BERT. Performance empiriquement supérieure.
 
    Q: Pourquoi BatchNorm?
-   R: Sans BatchNorm, l'entraînement était instable.
+   R: Sans BatchNorm [1], l'entraînement était instable.
    BatchNorm normalise les valeurs entre couches pour stabiliser les gradients.
+   Permet d'utiliser un learning rate plus élevé et convergence plus rapide.
 
    Q: Pourquoi CrossEntropyLoss?
    R: C'est la loss standard pour la classification multi-classe.
@@ -319,8 +371,10 @@ PARTIE 6 : Questions possibles à l'oral - FAQ
    R: On trie les prédictions par probabilité et on prend la première action
    qui est dans la liste des actions légales.
 
-   Q: Pourquoi 50 epochs?
-   R: Testé empiriquement. Moins = underfitting, plus = overfitting. Franchement pas besoin de plus. 
+   Q: Pourquoi 32 epochs avec batch_size=256?
+   R: Optimisé empiriquement. Batch size plus grand = gradients plus stables = convergence plus rapide.
+   32 epochs suffisent avec batch_size=256, alors qu'il fallait 50 epochs avec batch_size=128.
+   C'est un compromis vitesse/performance. 
 
 
    Q: Pourquoi normaliser ?

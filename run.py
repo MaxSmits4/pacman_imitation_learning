@@ -1,8 +1,7 @@
-import numpy as np
 import random
-import torch
 
-torch.cuda.empty_cache()
+import numpy as np
+import torch
 
 from pacman_module.pacman import runGame
 from pacman_module.ghostAgents import SmartyGhost
@@ -10,18 +9,22 @@ from pacman_module.ghostAgents import SmartyGhost
 from architecture import PacmanNetwork
 from pacmanagent import PacmanAgent
 
+torch.cuda.empty_cache()
 
 SEED = 42
 random.seed(SEED)
 np.random.seed(SEED)
-
-path_to_saved_model = "pacman_model.pth"
 torch.manual_seed(SEED)
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+path_to_saved_model = "pacman_model.pth"
+
+# device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = "cpu"
 
 model = PacmanNetwork().to(device)
-state_dict = torch.load(path_to_saved_model, map_location=device)
+state_dict = torch.load(
+    path_to_saved_model, map_location=device, weights_only=True
+)
 model.load_state_dict(state_dict)
 model.eval()
 
@@ -37,5 +40,4 @@ score, elapsed_time, nodes = runGame(
     hiddenGhosts=False,
 )
 
-print(f"Score: {score}")
-print(f"Computation time: {elapsed_time}")
+print(f"Computation time: {elapsed_time:.3f}")

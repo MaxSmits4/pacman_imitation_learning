@@ -56,3 +56,18 @@ BIBLIOGRAPHY:
     memory requirements, is invariant to diagonal rescaling of the gradients,
     and is well suited for problems that are large in terms of data and/or
     parameters."
+
+
+[5] LeCun, Y., Cortes, C., & Burges, C. (1998).
+    MNIST Handwritten Digit Database.
+    http://yann.lecun.com/exdb/mnist/
+
+    Why we reference MNIST:
+    Our Pacman project follows similar
+    principles: feature extraction → normalization → MLP classification.
+
+    Impact:
+    MNIST established best practices for supervised learning that we apply:
+    - Feature normalization ([0,1] range)
+    - Train/test split for generalization evaluation
+    - Cross-entropy loss for multi-class classification

@@ -96,6 +96,14 @@ def begin_graphics(
         _root_window = None
         raise
 
+    # Bring window to front so user doesn't have to search for it
+    # Must be done AFTER canvas is created and packed for macOS
+    _root_window.lift()
+    _root_window.attributes('-topmost', True)
+    _root_window.focus_force()
+    _root_window.update()
+    _root_window.after(100, lambda: _root_window.attributes('-topmost', False))
+
     # Bind to key-down and key-up events
     _root_window.bind("<KeyPress>", _keypress)
     _root_window.bind("<KeyRelease>", _keyrelease)
