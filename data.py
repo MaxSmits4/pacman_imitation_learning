@@ -10,8 +10,10 @@ Following best practices from classic supervised learning cf MNIST ref[5] :
 """
 
 import pickle
+
 import torch
 from torch.utils.data import Dataset
+
 from pacman_module.game import Directions
 
 
@@ -37,7 +39,8 @@ def state_to_tensor(state: object) -> torch.Tensor:
     - Food (4): n_food, direction_to_food_x, direction_to_food_y,
                 closest_food_dist
     - Maze (5): dist_north, dist_south, dist_east, dist_west, is_corner
-    - Danger (3): danger_level, ghost_blocks_food, escape_options
+    - Danger (5): danger_level, ghost_blocks_food, escape_options,
+                  ghost_in_direction_x, ghost_in_direction_y
     - Legal (5): legal_north, legal_south, legal_east, legal_west, legal_stop
 
     Returns: Tensor of shape (23) 1D
@@ -109,7 +112,8 @@ def state_to_tensor(state: object) -> torch.Tensor:
     # Danger features (3)
     legal_actions = state.getLegalPacmanActions()
 
-    danger_level = 1.0 / ghost_mantt_dist  # 1
+    # Avoid division by zero and cap danger level to 2
+    danger_level = 1.0 / max(ghost_mantt_dist, 0.5)  # 1
 
     ghost_blocks_food = 0.0  # 2
     if ghost_positions and food_positions:
@@ -129,32 +133,32 @@ def state_to_tensor(state: object) -> torch.Tensor:
         1.0 if action in legal_actions else 0.0 for action in ACTIONS
     ]
 
-    # In order to Normalize
-    MAX_DIST = 20.0
-    MAX_COORD = 20.0
+    # Normalize based on actual maze dimensions
+    # Maximum Manhattan distance is from one corner to the opposite corner
+    max_manhattan_dist = (maze_W - 1) + (maze_H - 1)
 
     features = [
-        # Position (2)
-        float(pac_pos_x) / MAX_COORD,
-        float(pac_pos_y) / MAX_COORD,
-        # Ghost (4)
-        direction_to_ghost_x / MAX_DIST,
-        direction_to_ghost_y / MAX_DIST,
-        ghost_mantt_dist / MAX_DIST,
+        # Position (2) - normalized by maze dimensions
+        float(pac_pos_x) / float(maze_W),
+        float(pac_pos_y) / float(maze_H),
+        # Ghost (4) - directions in X/Y normalized separately, distance by max
+        direction_to_ghost_x / float(maze_W),  # X-direction
+        direction_to_ghost_y / float(maze_H),  # Y-direction
+        ghost_mantt_dist / float(max_manhattan_dist),  # Manhattan distance
         ghost_adjacent,
         # Food (4)
-        n_food / 50.0,
-        direction_to_food_x / MAX_DIST,
-        direction_to_food_y / MAX_DIST,
-        closest_food_dist / MAX_DIST,
-        # Maze (5)
-        dist_north / 10.0,
-        dist_south / 10.0,
-        dist_east / 10.0,
-        dist_west / 10.0,
+        n_food / 50.0,  # Typical max food count
+        direction_to_food_x / float(maze_W),  # X-direction
+        direction_to_food_y / float(maze_H),  # Y-direction
+        closest_food_dist / float(max_manhattan_dist),  # Manhattan distance
+        # Maze (5) - wall distances normalized by maze dimensions
+        dist_north / float(maze_H),
+        dist_south / float(maze_H),
+        dist_east / float(maze_W),
+        dist_west / float(maze_W),
         is_corner,
         # Danger (3)
-        danger_level,
+        danger_level / 2.0,  # Normalize danger_level to [0, 1] range
         ghost_blocks_food,
         escape_options,
         # Legal actions (5)

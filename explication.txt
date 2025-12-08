@@ -3,42 +3,34 @@ PROJECT 2 - PACMAN IMITATION LEARNING - Documentation complète
 
 PARTIE 1 : Vue d'ensemble
 
-   But: apprendre à Pacman à imiter un expert en utilisant l'apprentissage supervisé. 
+   But: apprendre à Pacman à imiter un expert en utilisant l'apprentissage supervisé.
    Depuis un dataset de paires (GameState, action)
    et on veut entraîner un réseau de neurones à prédire quelle action l'expert aurait pris.
 
-   Ordre de lecture : ici les 5 fichiers qu'on a modifié
+   Ordre de lecture : ici les 4 fichiers qu'on a modifié
    1. data.py - Convertit GameState en 23 features
-   2. architecture.py - Définit le réseau MLP (23 → 128 → 64 → 32 → 5)
-   3. train.py - Entraîne le modèle (avec plotting.py pour les graphiques)
-   4. plotting.py - Fonctions de visualisation (graphiques loss & accuracy)
-   5. pacmanagent.py - Utilise le modèle pour jouer
+   2. architecture.py - Définit le réseau MLP (23 → 256 → 128 → 64 → 5)
+   3. train.py - Entraîne le modèle (avec fonction visualization() pour les graphiques)
+   4. pacmanagent.py - Utilise le modèle pour jouer
 
 
    Quick summary de chaque fichier :
 
    data.py (Feature Engineering)
    La partie la plus importante. On transforme le GameState en 23 features :
-   position, ghosts, food, géométrie du labyrinthe, danger, actions légales.
-   Tout est normalisé pour que le réseau converge bien.
-   Inspiré des techniques de prétraitement utilisées dans MNIST [5].
+   position, distances Manhattan pour ghost/food, géométrie du labyrinthe,
+   actions légales, et niveau de danger. Tout est normalisé pour que le réseau converge bien.
 
    architecture.py (Réseau de neurones)
-   MLP simple : 23 → 128 → 64 → 32 → 5 (3 couches cachées)
-   Pattern par couche : Linear → BatchNorm → GELU → Dropout(0.15)
+   MLP simple : 23 → 256 → 128 → 64 → 5 (3 couches cachées)
+   Pattern par couche : Linear → BatchNorm → GELU → Dropout(0.3)
    Architecture similaire aux MLPs classiques pour la classification (voir MNIST [5]).
 
    train.py (Entraînement)
-   Split train/test 80/20, Adam optimizer, 32 epochs, batch_size=256.
+   Split train/test 80/20, Adam optimizer, 150 epochs, batch_size=256.
    Utilise CrossEntropyLoss pour classification multi-classe (5 actions).
    Évaluation finale sur le test set avec calcul de l'accuracy.
-   Code modulaire : imports depuis plotting.py pour les visualisations.
-
-   plotting.py (Visualisation - nouveau fichier)
-   Fonctions dédiées pour les graphiques live pendant l'entraînement.
-   setup_training_plots() → initialise les figures (loss + accuracy).
-   update_training_plots() → met à jour les graphiques en temps réel.
-   Séparation claire : tout le code matplotlib est isolé ici.
+   Code modulaire : fonction visualization() intégrée pour les graphiques.
 
    pacmanagent.py (Agent)
    Utilise le modèle entraîné pour jouer.
@@ -53,8 +45,7 @@ PARTIE 1 : Vue d'ensemble
    ├── pacman_module/            → Moteur de jeu (NE PAS MODIFIER)
    ├── data.py                   → Feature engineering + Dataset
    ├── architecture.py           → Réseau de neurones (MLP)
-   ├── train.py                  → Boucle d'entraînement (code modulaire)
-   ├── plotting.py               → Visualisation (loss & accuracy) [NOUVEAU]
+   ├── train.py                  → Boucle d'entraînement + visualisation intégrée
    ├── pacmanagent.py            → Agent qui joue
    ├── run.py                    → Visualisation du jeu
    ├── write_submission.py       → Génération du CSV
@@ -74,28 +65,28 @@ PARTIE 2 : Data.py - Feature Engineering
    [1] py / 20       Position Y de Pacman
 
    INFORMATION GHOST (4 features):
-   [2] dx_ghost / 20    Direction X vers le ghost le plus proche
-   [3] dy_ghost / 20    Direction Y vers le ghost
-   [4] ghost_dist / 20  Distance Manhattan au ghost
-   [5] ghost_adjacent   1 si ghost à distance 1 (danger immédiat!)
+   [2] direction_to_ghost_x    Direction vers le ghost (normalisée)
+   [3] direction_to_ghost_y    Direction vers le ghost (normalisée)
+   [4] ghost_mantt_dist / diam Distance Manhattan au ghost
+   [5] ghost_adjacent          1 si ghost adjacent (distance ≤ 1)
 
    INFORMATION FOOD (4 features):
-   [6] n_food / 50          Nombre de food restante
-   [7] dx_food / 20         Direction X vers la food la plus proche
-   [8] dy_food / 20         Direction Y vers la food
-   [9] closest_food / 20    Distance à la food la plus proche
+   [6] n_food / 50                  Nombre de food restante
+   [7] direction_to_food_x          Direction vers la food la plus proche
+   [8] direction_to_food_y          Direction vers la food la plus proche
+   [9] closest_food_dist / diam     Distance Manhattan à la food la plus proche
 
    GEOMETRIE DU LABYRINTHE (5 features):
-   [10] dist_north / 10  Distance au mur au Nord
-   [11] dist_south / 10  Distance au mur au Sud
-   [12] dist_east / 10   Distance au mur à l'Est
-   [13] dist_west / 10   Distance au mur à l'Ouest
-   [14] is_corner        1 si Pacman est dans un coin (≤2 directions libres)
+   [10] dist_north / H  Distance au mur au Nord
+   [11] dist_south / H  Distance au mur au Sud
+   [12] dist_east  / W  Distance au mur à l'Est
+   [13] dist_west  / W  Distance au mur à l'Ouest
+   [14] is_corner       1 si c'est un coin (≤2 directions légales)
 
-   FEATURES DE DANGER (3 features) - Les plus importantes selon moi:
-   [15] danger_level      = 1/(ghost_dist), haut quand danger proche
-   [16] ghost_blocks_food = 1 si ghost entre Pacman et la food
-   [17] escape_options    = nombre de directions de fuite / 4
+   DANGER (3 features):
+   [15] danger_level      1.0 / max(ghost_dist, 0.5) - Plus élevé = plus dangereux
+   [16] ghost_blocks_food 1 si ghost est entre Pacman et la food
+   [17] escape_options    Nombre de directions légales (hors STOP) / 4
 
    ACTIONS LEGALES (5 features):
    [18] legal_north  1 si NORTH est légal
@@ -154,14 +145,14 @@ PARTIE 3 : Architecture (architecture.py)
    Notre input est un vecteur (je dirais même un tenseur!) 1D de 23 features sans relation spatiale,
    donc un MLP est le bon choix - similaire aux architectures fully-connected classiques.
 
-   Structure : 23 → 128 → 64 → 32 → 5
+   Structure : 23 → 256 → 128 → 64 → 5
 
    Pour chaque couche cachée ici 3: Linear → BatchNorm → GELU → Dropout
 
    1. Linear : transforme les données (multiplication matricielle + biais)
    2. BatchNorm [1] : normalise les valeurs entre couches (stabilise l'entraînement)
-   3. GELU [2] : activation smooth, meilleure que ReLU, la meilleur que j'ai trouver, testez d'autre
-   4. Dropout [3] : prévient l'overfitting (p=0.15)
+   3. GELU [2] : activation smooth, meilleure que ReLU
+   4. Dropout [3] : prévient l'overfitting (p=0.3)
    5. Pas d'activation finale : CrossEntropyLoss veut des logits bruts
 
    Pourquoi GELU et pas ReLU ?
@@ -169,20 +160,20 @@ PARTIE 3 : Architecture (architecture.py)
    meilleur flow de gradients, utilisé dans GPT et BERT.
 
 
-PARTIE 4 : Entraînement (train.py) + Visualisation (plotting.py)
+PARTIE 4 : Entraînement (train.py)
 
-   Pipeline (train.py) :
+   Pipeline :
    1. Charger le dataset (15018 échantillons)
    2. Split train/test (80%/20%) avec random_split
-   3. Entraîner pendant 32 epochs avec visualisation
+   3. Entraîner pendant 150 epochs avec visualisation
    4. Évaluer sur test set et sauvegarder le modèle
 
    Hyperparamètres optimisés :
-   - batch_size = 256  → Augmenté pour meilleure stabilité et vitesse
-   - epochs = 32       → Réduit car convergence plus rapide avec batch_size plus grand
-   - lr = 1e-3         → Learning rate standard pour Adam [4]
-   - test_ratio = 0.2  → 20% pour évaluation finale
-   - show_every = 8    → Fréquence de visualisation des plots
+   - batch_size = 256      → Batch size élevé pour gradients stables
+   - epochs = 150          → Assez d'epochs pour convergence complète
+   - lr = 8e-4             → Learning rate légèrement élevé pour converger plus vite
+   - test_ratio = 0.2      → 20% pour évaluation finale
+   - show_every = 30       → Fréquence de visualisation des plots
 
    Modifications importantes :
    - Utilisation de tqdm/trange pour progression en temps réel
@@ -190,24 +181,18 @@ PARTIE 4 : Entraînement (train.py) + Visualisation (plotting.py)
    - Évaluation du test set à chaque epoch
    - Checkpointing : sauvegarde automatique du meilleur modèle basé sur test accuracy
 
-   Architecture modulaire (nouveau design) :
-   - train.py → contient UNIQUEMENT la logique d'entraînement
-   - plotting.py → contient TOUTES les fonctions matplotlib
-   - evaluate_model() → fonction dédiée pour évaluer l'accuracy sur le test set
-   - Code PEP 8 conforme, lisible, maintenable
+   Visualisation (fonction visualization()) :
+   Fonction intégrée qui retourne deux fonctions pour gérer les graphiques :
 
-   Visualisation (plotting.py) :
-   Deux fonctions principales qui gèrent tous les graphiques :
-
-   1. setup_training_plots(num_plots)
+   1. setup_plots(num_plots)
       - Crée une fenêtre unique avec grille de subplots
-      - Loss plots à gauche (Epoch 0, 8, 16, 24, Final)
+      - Loss plots à gauche (Epoch 0, 30, 60, 90, 120, Final)
       - Accuracy plot à droite (courbe continue)
       - Retourne (fig, axes, ax_acc)
 
-   2. update_training_plots(axes, ax_acc, plot_idx, losses, ...)
+   2. update_plots(axes, ax_acc, plot_idx, losses, ...)
       - Met à jour les graphiques en temps réel
-      - Gère les mises à jour périodiques (toutes les 8 epochs)
+      - Gère les mises à jour périodiques (toutes les 30 epochs)
       - Gère la mise à jour finale (is_final=True)
       - Refresh automatique avec plt.pause()
 
@@ -272,14 +257,14 @@ PARTIE 4 : Entraînement (train.py) + Visualisation (plotting.py)
 
             ÉTAPE 4 : Cross Entropy = moyenne sur tout le batch
 
-            Un batch = groupe de 128 exemples traités ensemble.
+            Un batch = groupe de 256 exemples traités ensemble.
             On calcule la loss pour CHAQUE exemple, puis on fait la moyenne.
 
             Formule complète (du cours) :
                L(θ) = -1/N Σ_(x_j,y_j)∈d Σ_{i=1}^C y_ij log f_i(x_j; θ)
 
             Où :
-            - N = nombre d'exemples dans le batch (128)
+            - N = nombre d'exemples dans le batch (256)
             - C = nombre de classes (5 actions)
             - y_ij = 1 si l'exemple j appartient à la classe i, 0 sinon
             - f_i(x_j; θ) = probabilité prédite par le réseau pour la classe i
@@ -331,14 +316,6 @@ PARTIE 5 : Agent (pacmanagent.py)
 
 PARTIE 6 : Questions possibles à l'oral - FAQ
 
-   Q: Pourquoi avoir séparé train.py et plotting.py ?
-   R: Séparation des responsabilités (design pattern fondamental).
-   train.py s'occupe UNIQUEMENT de l'entraînement (logique métier).
-   plotting.py s'occupe UNIQUEMENT de la visualisation (présentation).
-   Avantages : code plus lisible, testable, maintenable, réutilisable.
-   Si on veut changer les graphiques, on modifie juste plotting.py.
-   Code PEP 8 conforme avec lignes < 79 caractères.
-
    Q: Pourquoi un MLP et pas un CNN?
    R: Les CNN sont faits pour les images 2D où les pixels voisins sont liés.
    Notre input est un vecteur 1D de 23 features sans relation spatiale,
@@ -371,11 +348,15 @@ PARTIE 6 : Questions possibles à l'oral - FAQ
    R: On trie les prédictions par probabilité et on prend la première action
    qui est dans la liste des actions légales.
 
-   Q: Pourquoi 32 epochs avec batch_size=256?
-   R: Optimisé empiriquement. Batch size plus grand = gradients plus stables = convergence plus rapide.
-   32 epochs suffisent avec batch_size=256, alors qu'il fallait 50 epochs avec batch_size=128.
-   C'est un compromis vitesse/performance. 
+   Q: Pourquoi 150 epochs avec batch_size=256 et lr=8e-4?
+   R: Optimisé empiriquement. Batch size plus grand = gradients plus stables.
+   150 epochs permettent une convergence complète (best model à epoch ~121).
+   LR légèrement élevé (8e-4 au lieu de 5e-4) accélère la convergence.
 
+   Q: Pourquoi dropout=0.3?
+   R: Balance entre regularisation et capacité du réseau.
+   Trop de dropout (0.4) = underfitting, trop peu (0.15) = risque d'overfitting.
+   0.3 est le sweet spot pour notre architecture.
 
    Q: Pourquoi normaliser ?
    R: Les réseaux de neurones fonctionnent mieux quand toutes les features
@@ -384,6 +365,14 @@ PARTIE 6 : Questions possibles à l'oral - FAQ
    le score pourrait être -500 à +1000, les flags sont 0 ou 1...
    Avec normalisation tout est ~[0,1], ce qui accélère la convergence
    et évite que certaines features dominent les autres.
+
+   Q: Comment la normalisation s'adapte aux différents mazes ?
+   R: On utilise les dimensions réelles du maze pour normaliser :
+   - Positions : pac_x / maze_width, pac_y / maze_height
+   - Distances : distances / (maze_width + maze_height)
+   - Murs : dist_north / maze_height, dist_east / maze_width
+   Comme ça, peu importe la taille du maze (15x15 ou 25x25),
+   les features restent dans [0, 1] et le modèle généralise bien.
 
    Q: Pourquoi convertir les actions en indices ?
    R: Les réseaux de neurones ne comprennent que les nombres,
@@ -405,3 +394,17 @@ PARTIE 6 : Questions possibles à l'oral - FAQ
 
    Pendant le jeu :
    Réseau prédit [0.05, 0.1, 0.75, 0.08, 0.02] → argmax = 2 → reconverti en EAST
+
+   Q: Pourquoi l'accuracy plafonne à ~88-89% ?
+   R: L'accuracy mesure si le réseau prédit EXACTEMENT la même action que l'expert.
+   Mais dans ~10-15% des situations, il y a plusieurs actions valides (ex: ghost loin,
+   plusieurs chemins vers la food). Le réseau peut choisir une action différente mais
+   tout aussi bonne. C'est normal et ça ne veut pas dire que le modèle est mauvais.
+
+   Q: Est-ce que le modèle va fonctionner sur Gradescope avec des mazes différents ?
+   R: Oui ! Les features sont maze-aware :
+   - legal_actions s'adapte automatiquement aux murs
+   - dist_until_wall détecte les murs dans chaque direction
+   - is_corner s'adapte à la topologie du maze
+   Le modèle a appris des patterns généraux (fuir les ghosts, aller vers la food),
+   pas juste à mémoriser un maze spécifique.

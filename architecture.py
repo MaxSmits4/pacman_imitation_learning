@@ -13,33 +13,34 @@ class PacmanNetwork(nn.Module):
 
     def __init__(
         self,
-        input_features=23,
+        input_features=23,  # Retour à 23 features originales
         num_actions=5,
-        hidden_dims=[128, 64, 32],
-        activation=nn.GELU()
+        hidden_dims=[256, 128, 64],  # Plus de capacité: 23 → 256 → 128 → 64 → 5
+        activation=nn.GELU(),
+        dropout=0.3  # Plus de dropout car réseau plus grand
     ):
         super().__init__()
 
         layers = []
 
-        # Input layer: 23 → 128
+        # Input layer: 23 → 256
         layers.append(nn.Linear(input_features, hidden_dims[0]))
         layers.append(nn.BatchNorm1d(hidden_dims[0]))  # Normalize activations
         layers.append(activation)
-        layers.append(nn.Dropout(0.15))  # Prevent overfitting
+        layers.append(nn.Dropout(dropout))  # Prevent overfitting
 
-        # Hidden layers: 128 → 64 → 32
+        # Hidden layers: 256 → 128 → 64
         for i in range(len(hidden_dims) - 1):
             layers.append(nn.Linear(hidden_dims[i], hidden_dims[i + 1]))
             layers.append(nn.BatchNorm1d(hidden_dims[i + 1]))
             layers.append(activation)
-            layers.append(nn.Dropout(0.15))
+            layers.append(nn.Dropout(dropout))
 
-        # Output layer: 32 → 5 (no activation, raw logits)
+        # Output layer: 64 → 5 (no activation, raw logits)
         layers.append(nn.Linear(hidden_dims[-1], num_actions))
 
         self.net = nn.Sequential(*layers)
-        self.criterion = nn.CrossEntropyLoss()  # Multi-class classification loss
+        self.criterion = nn.CrossEntropyLoss()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass: features → logits"""

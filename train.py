@@ -12,18 +12,88 @@ Supervised learning pipeline:
     [5] LeCun et al. (1998) - MNIST: Train/test split, loss function principles
 """
 
-import torch
-from torch.utils.data import DataLoader, random_split
-from torch.optim import Adam
 import matplotlib.pyplot as plt
+import torch
+from torch.optim import Adam
+from torch.utils.data import DataLoader, random_split
 from tqdm import trange
 
 from architecture import PacmanNetwork
 from data import PacmanDataset
-from plotting import setup_training_plots, update_training_plots
 
 
-def evaluate_model(model, loader, device):
+def visualization(num_plots):
+    """
+    Initialize and manage matplotlib plots for training monitoring.
+
+    Returns:
+        setup_plots: Function to initialize plots
+        update_plots: Function to update plots during training
+    """
+    def setup_plots(num_plots):
+        """Initialize matplotlib figures for loss and accuracy plots."""
+        fig = plt.figure(figsize=(5 * num_plots + 8, 4))
+
+        # Create grid: loss plots on left, accuracy on right
+        gs = fig.add_gridspec(
+            1, num_plots + 1, width_ratios=[5] * num_plots + [8]
+        )
+
+        # Loss subplot axes
+        axes = [fig.add_subplot(gs[0, i]) for i in range(num_plots)]
+
+        # Accuracy subplot axis
+        ax_acc = fig.add_subplot(gs[0, num_plots])
+        ax_acc.set_title("Test Accuracy vs Epoch")
+        ax_acc.set_xlabel("Epoch")
+        ax_acc.set_ylabel("Accuracy (%)")
+        ax_acc.grid()
+
+        # Bring matplotlib window to front
+        fig.canvas.manager.show()
+        fig.canvas.flush_events()
+
+        return fig, axes, ax_acc
+
+    def update_plots(
+        axes, ax_acc, plot_idx, losses, epoch_numbers,
+        test_accuracies, epoch, fig, is_final=False
+    ):
+        """Update loss and accuracy plots."""
+        # Update loss plot
+        axes[plot_idx].plot(losses)
+        axes[plot_idx].set_title(f"Epoch {epoch}" if not is_final else "Final")
+        axes[plot_idx].set_ylabel("Loss")
+        axes[plot_idx].set_xlabel("Steps")
+        axes[plot_idx].set_xscale("log")
+        axes[plot_idx].grid()
+
+        # Update accuracy plot
+        ax_acc.clear()
+        ax_acc.plot(
+            epoch_numbers, test_accuracies, 'b-',
+            linewidth=2, marker='o'
+        )
+        title_suffix = " (Final)" if is_final else ""
+        ax_acc.set_title(f"Test Accuracy vs Epoch{title_suffix}")
+        ax_acc.set_xlabel("Epoch")
+        ax_acc.set_ylabel("Accuracy (%)")
+        ax_acc.grid()
+        ax_acc.set_ylim([0, 100])
+
+        # Refresh display
+        plt.figure(fig.number)
+        plt.tight_layout()
+        if is_final:
+            plt.draw()
+            plt.pause(0.1)
+        else:
+            plt.pause(0.01)
+
+    return setup_plots, update_plots
+
+
+def evaluate_acc_model(model, loader, device):
     """Evaluate model accuracy on dataset."""
     model.eval()
     correct = 0
@@ -48,16 +118,15 @@ if __name__ == "__main__":
     #   -> optim.step() -> loss tracking.
     #
     # Changes : 
-    #   1) Custom 80/20 split via random_split (MNIST already provides
-    #      train/test sets).
+    #   1) 80/20 split via random_split
     #   2) Per-epoch evaluation on the test set.
     #   3) Best-model checkpointing based on test accuracy.
 
-    # Hyperparameters
-    batch_size = 256  # Samples per batch
-    epochs = 32  # Training iterations over full dataset
-    show_every = 8  # Plot frequency
-    learning_rate = 1e-3  # Adam optimizer learning rate
+    # Hyperparameters 
+    batch_size = 256
+    epochs = 150  
+    show_every = 30  # Graph every 30 epochs
+    learning_rate = 8e-4  # LR slightly higher in order to converge faster 
 
     # Load expert demonstrations
     dataset = PacmanDataset(path="datasets/pacman_dataset.pkl")
@@ -82,12 +151,13 @@ if __name__ == "__main__":
 
     model = model.to(device)
 
-    # Optimizer and loss tracking
+    # Optimizer 
     losses = []
     optim = Adam(model.parameters(), lr=learning_rate)
 
     # Best model tracking
     best_accuracy = 0.0
+    best_epoch = 0
     save_file = "pacman_model.pth"
 
     # Test accuracy tracking
@@ -96,7 +166,8 @@ if __name__ == "__main__":
 
     # Setup real-time plotting (loss & accuracy in one window)
     num_plots = (epochs // show_every) + 1
-    fig, axes, ax_acc = setup_training_plots(num_plots)
+    setup_plots, update_plots = visualization(num_plots)
+    fig, axes, ax_acc = setup_plots(num_plots)
     plot_idx = 0
 
     # Training loop
@@ -121,7 +192,7 @@ if __name__ == "__main__":
             pbar.set_postfix({"Loss": f"{loss.item():.4f}"})
 
         # Evaluate on test set every epoch
-        current_accuracy = evaluate_model(model, loader_test, device)
+        current_accuracy = evaluate_acc_model(model, loader_test, device)
 
         # Track accuracy for plotting
         test_accuracies.append(current_accuracy * 100)  # Convert to percentage
@@ -130,32 +201,34 @@ if __name__ == "__main__":
         # Save best model
         if current_accuracy > best_accuracy:
             best_accuracy = current_accuracy
+            best_epoch = i
             torch.save(model.state_dict(), save_file)
             pbar.set_postfix({
                 "Loss": f"{loss.item():.4f}",
-                "Best Acc": f"{best_accuracy:.2%}"
+                "Best Acc": f"{best_accuracy:.2%}",
+                "Epoch": best_epoch
             })
 
         model.train()  # Back to training mode
 
         # Periodic visualization
-        # (same idea as MNIST template: lightweight live loss plots
-        # to verify convergence)
+        # like MNIST template: lightweight live loss plots
+        # to verify convergence
         if i % show_every == 0:
-            update_training_plots(
+            update_plots(
                 axes, ax_acc, plot_idx, losses, epoch_numbers,
                 test_accuracies, i, fig
             )
             plot_idx += 1
 
     # Final plots
-    update_training_plots(
+    update_plots(
         axes, ax_acc, -1, losses, epoch_numbers,
         test_accuracies, "Final", fig, is_final=True
     )
 
     # Final evaluation with best model
-    print(f"\nBest model saved -> accuracy: {best_accuracy:.2%}")
+    print(f"\nBest model saved at epoch {best_epoch} -> accuracy: {best_accuracy:.2%}")
 
     # Keep graphs open
     plt.show()

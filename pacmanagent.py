@@ -3,8 +3,10 @@
 """
 
 import torch
+
 from pacman_module.game import Agent, Directions
-from data import state_to_tensor, INDEX_TO_ACTION
+
+from data import INDEX_TO_ACTION, state_to_tensor
 
 
 class PacmanAgent(Agent):
