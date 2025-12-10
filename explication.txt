@@ -1,10 +1,7 @@
 PROJECT 2 - PACMAN IMITATION LEARNING - Documentation complète
 
 
-PARTIE 0 : Comment fonctionne un réseau de neurones ? (Pour les vrais débutants)
-
-   Si tu te demandes "mais c'est quoi tous ces trucs de gradients, loss, forward, backward",
-   cette section est pour toi. On explique TOUT depuis zéro.
+PARTIE 0 : Comment fonctionne un réseau de neurones ?
 
    ÉTAPE 1 : C'est quoi un réseau de neurones ?
 
@@ -45,7 +42,7 @@ PARTIE 0 : Comment fonctionne un réseau de neurones ? (Pour les vrais débutant
    Loss = -log(probabilité de la bonne action)
 
    Dans notre exemple :
-   - Logits : [2.1, 0.5, 3.2, 1.0, 0.3]
+   - Logits=sortie : [2.1, 0.5, 3.2, 1.0, 0.3]
    - Softmax : [0.18, 0.04, 0.54, 0.06, 0.03]  (conversion en probabilités)
    - Bonne action = NORTH (indice 0), probabilité = 0.18
    - Loss = -log(0.18) = 1.71
@@ -60,16 +57,135 @@ PARTIE 0 : Comment fonctionne un réseau de neurones ? (Pour les vrais débutant
    Question : Dans quelle direction faut-il bouger chaque poids ?
    Réponse : Les GRADIENTS !
 
-   Le gradient d'un poids = dérivée de la loss par rapport à ce poids.
-   Il dit : "Si j'augmente ce poids de 0.01, la loss va augmenter/diminuer de combien ?"
+   IMPORTANT :
+   Un gradient est un vecteur (ou tenseur) ou une matrice qui a la MÊME FORME que les paramètres qu'il décrit.
 
-   Exemple :
+   Définition mathématique :
+   Pour un réseau avec poids W et loss L, le gradient est :
+
+   ∇W L = [∂L/∂w₁, ∂L/∂w₂, ..., ∂L/∂wₙ]
+
+   Clarification importante :
+   - L (la loss) est un SCALAIRE (un seul nombre, ex: L = 1.71)
+   - W (les poids) sont des matrices/vecteurs (ex: matrice 256×23)
+   - ∇W L (le gradient) est une matrice/vecteur de la MÊME FORME que W
+   - On calcule la dérivée du scalaire L par rapport à chaque élément de W
+
+   Forme du gradient selon les paramètres :
+   - Si W est un scalaire → gradient = scalaire
+   - Si W est un vecteur → gradient = vecteur
+   - Si W est une matrice → gradient = matrice de même taille
+
+   POURQUOI W EST UNE MATRICE (et pas juste un poids par neurone) ?
+   Dans un réseau de neurones fully-connected (MLP), CHAQUE neurone de sortie
+   est connecté à TOUS les neurones d'entrée. Il faut donc un poids pour chaque connexion !
+
+   Exemple simple : 3 inputs → 2 outputs
+
+   Input (3)              Output (2)
+     x₁ ───w₁₁──→ ┐
+     x₂ ───w₁₂──→ ├──→ y₁ = w₁₁·x₁ + w₁₂·x₂ + w₁₃·x₃ + b₁
+     x₃ ───w₁₃──→ ┘
+
+     x₁ ───w₂₁──→ ┐
+     x₂ ───w₂₂──→ ├──→ y₂ = w₂₁·x₁ + w₂₂·x₂ + w₂₃·x₃ + b₂
+     x₃ ───w₂₃──→ ┘
+
+   On a besoin de 6 poids (2×3) pour connecter 3 inputs à 2 outputs !
+   Ces 6 poids forment une matrice W de taille 2×3 :
+
+   W = [ w₁₁  w₁₂  w₁₃ ]   ← poids pour calculer y₁
+       [ w₂₁  w₂₂  w₂₃ ]   ← poids pour calculer y₂
+
+   En notation matricielle : y = W @ x + b (produit matriciel)
+
+   QU'EST-CE QU'UNE COUCHE LINÉAIRE (Linear layer) ?
+
+   Une couche linéaire fait une TRANSFORMATION AFFINE : y = W @ x + b
+
+   Où :
+   - x = vecteur d'entrée
+   - W = matrice de poids (weights)
+   - b = vecteur de biais (bias)
+   - y = vecteur de sortie
+   - @ = produit matriciel
+
+
+   C'est appelé "linéaire" car chaque sortie est une COMBINAISON LINÉAIRE des entrées
+
+   Exemple : nn.Linear(3, 2) transforme 3 valeurs en 2 valeurs
+
+   x = [x₁, x₂, x₃]  (input 3D)
+      ↓ y = W @ x + b
+   y = [y₁, y₂]      (output 2D)
+
+   Où :
+   y₁ = w₁₁·x₁ + w₁₂·x₂ + w₁₃·x₃ + b₁  ← somme pondérée
+   y₂ = w₂₁·x₁ + w₂₂·x₂ + w₂₃·x₃ + b₂  ← somme pondérée
+
+   IMPORTANT : Pourquoi "linéaire" si on a des activations non-linéaires (ReLU) ?
+
+   Le réseau COMPLET n'est PAS linéaire grâce aux ReLU qui cassent la linéarité !
+
+   Sans ReLU : Linear(Linear(x)) = Linear(x)  ← Empiler des couches linéaires est inutile !
+   Avec ReLU : Linear(ReLU(Linear(x))) ≠ Linear(x)  ← Peut apprendre des fonctions complexes !
+
+   Pipeline d'une couche :
+   Input (23) → Linear(23→256) : y=W@x+b  [LINÉAIRE]
+             → ReLU() : y=max(0,y)        [NON-LINÉAIRE] ← CASSELA LINÉARITÉ !
+             → Linear(256→128) : y=W@x+b  [LINÉAIRE]
+             → ReLU() : y=max(0,y)        [NON-LINÉAIRE]
+
+   C'est l'alternance Linear/ReLU qui donne au réseau sa capacité d'apprentissage !
+
+   Exemple concret dans notre réseau Pacman :
+   Dans architecture.py, plusieurs couches linéaires :
+
+   nn.Linear(23, 256)  → Poids W₁ : matrice 256×23 (256×23 = 5888 poids !)
+                       → Gradient ∇W₁ L : matrice 256×23
+                       → Calcule : y = W₁ @ x + b₁ (23 inputs → 256 outputs)
+
+   nn.Linear(256, 128) → Poids W₂ : matrice 128×256 (32768 poids !)
+                       → Gradient ∇W₂ L : matrice 128×256
+
+   nn.Linear(128, 64)  → Poids W₃ : matrice 64×128 (8192 poids !)
+                       → Gradient ∇W₃ L : matrice 64×128
+
+   nn.Linear(64, 5)    → Poids W₄ : matrice 5×64 (320 poids !)
+                       → Gradient ∇W₄ L : matrice 5×64
+
+   Le gradient ∇W₁ L est une matrice 256×23 où chaque élément (i,j) contient :
+   ∂L/∂W₁[i,j] = "si j'augmente W₁[i,j] de 0.01, L change de combien ?"
+
+   Notre réseau contient donc 5888 + 32768 + 8192 + 320 = 47168 poids au total !
+   Chacun de ces poids a son propre gradient calculé par loss.backward().
+
+   Formule de rétropropagation (chain rule) :
+
+   Pour la dernière couche (classification avec CrossEntropyLoss) :
+      L = -log(softmax(z)[y_true])
+      où z = W₄·x₃ + b₄
+
+      ∇W₄ L = (ŷ - y_true) ⊗ x₃ᵀ
+
+   Puis on remonte les couches avec la règle de la chaîne :
+      ∇W₃ L = (∇W₄ L · W₄ᵀ) ⊙ σ'(z₃) ⊗ x₂ᵀ
+      ∇W₂ L = (∇W₃ L · W₃ᵀ) ⊙ σ'(z₂) ⊗ x₁ᵀ
+      ...et ainsi de suite jusqu'à la première couche
+
+   Où :
+   - ⊗ = produit tensoriel (outer product)
+   - ⊙ = produit élément par élément (Hadamard product)
+   - σ'(z) = dérivée de la fonction d'activation (ReLU dans notre cas : 1 si z>0, 0 sinon)
+
+   Exemple simple :
    - Poids w = 0.5
    - Gradient = -0.3
    - Signification : Si j'augmente w, la loss DIMINUE (c'est bien !)
 
    loss.backward() calcule automatiquement TOUS les gradients pour TOUS les poids.
-   C'est de la magie mathématique (règle de la chaîne en calcul différentiel).
+   C'est de la magie mathématique qui utilise la règle de la chaîne en calcul différentiel.
+   PyTorch fait toute cette rétropropagation automatiquement !
 
    ÉTAPE 5 : Optimizer (Mise à jour des poids)
 
@@ -188,6 +304,120 @@ PARTIE 0 : Comment fonctionne un réseau de neurones ? (Pour les vrais débutant
    │      Les poids sont maintenant meilleurs !         │
    └─────────────────────────────────────────────────────┘
 
+   DÉTAIL DE L'ÉTAPE 2 prédiction: Le FORWARD PASS (model(features))
+
+   Voici ce qui se passe VRAIMENT à l'intérieur de model(features) :
+   Toutes les couches (Linear, BatchNorm, ReLU, Dropout) sont appelées ici !
+
+   features (batch de 256 exemples × 23 valeurs chacun)
+
+   C'est une MATRICE de forme (256, 23) :
+   ┌──────────────────────────────────────────────────────┐
+   │ Ligne 1  : State 1  → [0.25, 0.30, 0.8, ..., 1, 0]  │  (23 features)
+   │ Ligne 2  : State 2  → [0.10, 0.45, 0.5, ..., 0, 1]  │  (23 features)
+   │ Ligne 3  : State 3  → [0.50, 0.20, 0.3, ..., 1, 1]  │  (23 features)
+   │ ...                                                   │
+   │ Ligne 256: State 256 → [0.35, 0.60, 0.9, ..., 1, 0] │  (23 features)
+   └──────────────────────────────────────────────────────┘
+
+   Chaque LIGNE = 1 état de jeu différent (position Pacman, ghost, food, etc.)
+   Chaque COLONNE = 1 feature parmi les 23 (ex: colonne 0 = position X de Pacman)
+
+   On traite 256 états EN MÊME TEMPS pour :
+   - Paralléliser les calculs sur GPU (plus rapide)
+   - Avoir un gradient plus stable (moyenne sur 256 exemples)
+
+   En PyTorch : features.shape = torch.Size([256, 23])
+                                            ↑     ↑
+                                         batch   features
+                                         size    par état
+       ↓
+   ┌───────────────────────────────────────────────────┐
+   │ COUCHE 1 : Input → Hidden1                       │
+   ├───────────────────────────────────────────────────┤
+   │ Linear(23, 256)    : x @ W₁ + b₁                 │
+   │ BatchNorm1d(256)   : normalise les activations   │
+   │ ReLU()             : activation f(x) = max(0,x)  │
+   │ Dropout(0.3)       : éteint 30% des neurones     │
+   └───────────────────────────────────────────────────┘
+       ↓ (256 valeurs par exemple)
+   ┌───────────────────────────────────────────────────┐
+   │ COUCHE 2 : Hidden1 → Hidden2                      │
+   ├───────────────────────────────────────────────────┤
+   │ Linear(256, 128)   : x @ W₂ + b₂                 │
+   │ BatchNorm1d(128)   : normalise les activations   │
+   │ ReLU()             : activation f(x) = max(0,x)  │
+   │ Dropout(0.3)       : éteint 30% des neurones     │
+   └───────────────────────────────────────────────────┘
+       ↓ (128 valeurs par exemple)
+   ┌───────────────────────────────────────────────────┐
+   │ COUCHE 3 : Hidden2 → Hidden3                      │
+   ├───────────────────────────────────────────────────┤
+   │ Linear(128, 64)    : x @ W₃ + b₃                 │
+   │ BatchNorm1d(64)    : normalise les activations   │
+   │ ReLU()             : activation f(x) = max(0,x)  │
+   │ Dropout(0.3)       : éteint 30% des neurones     │
+   └───────────────────────────────────────────────────┘
+       ↓ (64 valeurs par exemple)
+   ┌───────────────────────────────────────────────────┐
+   │ COUCHE OUTPUT : Hidden3 → Actions                 │
+   ├───────────────────────────────────────────────────┤
+   │ Linear(64, 5)      : x @ W₄ + b₄                 │
+   │ (PAS d'activation, on veut les logits bruts)     │
+   └───────────────────────────────────────────────────┘
+       ↓
+   logits = [2.1, 0.5, 3.2, 1.0, 0.3]
+            ↑    ↑    ↑    ↑    ↑
+          NORTH SOUTH EAST WEST STOP
+
+   DÉTAIL DE L'ÉTAPE 4 : Le BACKWARD PASS (loss.backward())
+
+   Le gradient remonte dans l'ORDRE INVERSE, couche par couche :
+
+   loss.backward()  ← On démarre ici
+       ↑
+   ┌───────────────────────────────────────────────────┐
+   │ SORTIE : Gradient initial                         │
+   │ ∇loss = différence entre prédiction et vérité    │
+   └───────────────────────────────────────────────────┘
+       ↑
+   ┌───────────────────────────────────────────────────┐
+   │ Linear(64, 5) ← Reçoit ∇loss                      │
+   │ Calcule : ∇W₄ (gradient des poids de la couche)  │
+   │ Propage : gradient vers la couche précédente     │
+   └───────────────────────────────────────────────────┘
+       ↑
+   ┌───────────────────────────────────────────────────┐
+   │ Dropout ← Propage le gradient (skip si désactivé) │
+   └───────────────────────────────────────────────────┘
+       ↑
+   ┌───────────────────────────────────────────────────┐
+   │ ReLU ← Multiplie gradient par 1 si x>0, 0 sinon  │
+   │ (dérivée de l'activation)                         │
+   └───────────────────────────────────────────────────┘
+       ↑
+   ┌───────────────────────────────────────────────────┐
+   │ BatchNorm ← Ajuste le gradient selon la norm     │
+   └───────────────────────────────────────────────────┘
+       ↑
+   ┌───────────────────────────────────────────────────┐
+   │ Linear(128, 64) ← Calcule ∇W₃                     │
+   └───────────────────────────────────────────────────┘
+       ↑
+   Dropout ← BatchNorm ← ReLU ← Linear(256, 128) ← ...
+       ↑
+   Continue jusqu'à la première couche !
+       ↑
+   ┌───────────────────────────────────────────────────┐
+   │ Linear(23, 256) ← Calcule ∇W₁                     │
+   │ C'est fini ! Tous les gradients sont calculés    │
+   └───────────────────────────────────────────────────┘
+
+   Résumé :
+   - FORWARD (étape 2) : features → Linear → BatchNorm → ReLU → Dropout → ... → logits
+   - BACKWARD (étape 4) : loss ← Linear ← Dropout ← ReLU ← BatchNorm ← ... ← input
+   - OPTIMIZER (étape 5) : Utilise tous les ∇W calculés pour mettre à jour les poids
+
    ÉVALUATION (on teste, sans modifier les poids) :
    ┌─────────────────────────────────────────────────────┐
    │  with torch.no_grad():  [pas de gradients]         │
@@ -239,7 +469,7 @@ PARTIE 0 : Comment fonctionne un réseau de neurones ? (Pour les vrais débutant
    Tu comprends : "Ah oui, il calcule l'erreur, calcule les gradients,
    et ajuste les poids pour faire mieux la prochaine fois !"
 
-
+-------------------------------------------------------------------------------------------------------
 PARTIE 1 : Vue d'ensemble
 
    But: apprendre à Pacman à imiter un expert en utilisant l'apprentissage supervisé.
@@ -251,6 +481,7 @@ PARTIE 1 : Vue d'ensemble
    2. architecture.py - Définit le réseau MLP (23 → 256 → 128 → 64 → 5)
    3. train.py - Entraîne le modèle (simple console output)
    4. pacmanagent.py - Utilise le modèle pour jouer
+   5. write_submission.py - Génère le CSV de prédictions pour le test set
 
 
    Quick summary de chaque fichier :
@@ -273,6 +504,12 @@ PARTIE 1 : Vue d'ensemble
    pacmanagent.py (Agent)
    Utilise le modèle entraîné pour jouer.
    Convertit l'état → features → forward → softmax → meilleure action légale.
+
+   write_submission.py (Génération CSV)
+   Charge le modèle entraîné et le test set pour générer les prédictions.
+   Pour chaque état du test set : state_to_tensor → model(x) → argmax → INDEX_TO_ACTION.
+   Utilise torch.no_grad() pour désactiver les gradients (pas besoin en inférence).
+   Génère submission.csv avec les actions prédites dans l'ordre du test set.
 
 
    Structure du projet :
@@ -385,17 +622,17 @@ PARTIE 3 : Architecture (architecture.py)
 
    Structure : 23 → 256 → 128 → 64 → 5
 
-   Pour chaque couche cachée ici 3: Linear → BatchNorm → GELU → Dropout
+   Pour chaque couche cachée ici 3: Linear → BatchNorm → ReLU → Dropout
 
    1. Linear : transforme les données (multiplication matricielle + biais)
    2. BatchNorm [1] : normalise les valeurs entre couches (stabilise l'entraînement)
-   3. GELU [2] : activation smooth, meilleure que ReLU
+   3. ReLU : activation f(x) = max(0, x), simple et efficace
    4. Dropout [3] : prévient l'overfitting (p=0.3)
    5. Pas d'activation finale : CrossEntropyLoss veut des logits bruts
 
-   Pourquoi GELU et pas ReLU ?
-   GELU [2] est plus smooth (pas de coupure brutale à 0),
-   meilleur flow de gradients, utilisé dans GPT et BERT.
+   Pourquoi ReLU ?
+   ReLU est l'activation standard pour les MLPs : simple, rapide, efficace.
+   Elle résout le problème du vanishing gradient et permet une convergence rapide.
 
 
 PARTIE 4 : Entraînement (train.py)
@@ -535,7 +772,49 @@ PARTIE 5 : Agent (pacmanagent.py)
    Juste lire le .py suffit
 
 
-PARTIE 6 : Questions possibles à l'oral - FAQ
+PARTIE 6 : Génération du CSV de soumission (write_submission.py)
+
+   Ce fichier permet de générer le fichier submission.csv pour Gradescope.
+   Il charge le modèle entraîné et fait des prédictions sur pacman_test.pkl.
+
+   ÉTAPE 1 : Initialisation (méthode __init__)
+
+   - Charge le test set depuis pacman_test.pkl
+   - ATTENTION : Le test set contient uniquement des GameState (pas d'actions !)
+   - Charge le modèle depuis pacman_model.pth
+   - Met le modèle en mode évaluation avec model.eval()
+
+   ÉTAPE 2 : Prédiction (méthode predict_on_testset)
+
+   Pour chaque état du test set :
+   1. state_to_tensor(state) → Convertit GameState en tensor de 23 features
+   2. x.unsqueeze(0) → Ajoute une dimension batch (1, 23) car le modèle attend un batch
+   3. with torch.no_grad() → Désactive le calcul des gradients (pas besoin en inférence)
+   4. logits = self.model(x) → Forward pass, obtient les scores bruts pour chaque action
+   5. pred_index = logits.argmax(dim=1).item() → Prend l'action avec le score le plus élevé
+   6. action = INDEX_TO_ACTION[pred_index] → Convertit l'indice en objet Direction
+   7. actions.append(action) → Ajoute l'action à la liste
+
+   ÉTAPE 3 : Écriture du CSV (méthode write_csv)
+
+   - Crée un DataFrame pandas avec une colonne ACTION
+   - Écrit les prédictions dans submission.csv
+   - Format attendu : une action par ligne (NORTH, SOUTH, EAST, WEST, STOP)
+
+   IMPORTANT :
+   - Les prédictions doivent suivre le MÊME ORDRE que le test set
+   - torch.no_grad() est crucial pour économiser la mémoire et accélérer l'inférence
+   - On n'utilise PAS de softmax ici car on veut juste l'action avec le score max
+   - model.eval() désactive le dropout pour avoir des prédictions déterministes
+
+   Changements effectués :
+   - Importé INDEX_TO_ACTION depuis data.py pour convertir indices → actions
+   - Complété la boucle de prédiction avec le code manquant
+   - Utilisé torch.no_grad() pour optimiser les performances
+   - Fonction d'activation changée de GELU à ReLU dans architecture.py
+
+
+PARTIE 7 : Questions possibles à l'oral - FAQ
 
    Q: Pourquoi un MLP et pas un CNN?
    R: Les CNN sont faits pour les images 2D où les pixels voisins sont liés.
@@ -546,9 +825,11 @@ PARTIE 6 : Questions possibles à l'oral - FAQ
    R: Les NN convergent mieux quand les inputs sont dans la même échelle.
    Sans normalisation, certaines features domineraient les autres.
 
-   Q: Pourquoi GELU?
-   R: Activation smooth avec meilleur flow de gradients que ReLU.
-   Utilisé dans GPT, BERT. Performance empiriquement supérieure.
+   Q: Pourquoi ReLU maintenant au lieu de GELU?
+   R: ReLU est plus simple et rapide à calculer : f(x) = max(0, x).
+   GELU était utilisé avant pour un flow de gradients plus smooth, mais ReLU
+   fonctionne très bien pour ce problème et converge rapidement.
+   ReLU est l'activation standard dans les MLPs classiques.
 
    Q: Pourquoi BatchNorm?
    R: Sans BatchNorm [1], l'entraînement était instable.

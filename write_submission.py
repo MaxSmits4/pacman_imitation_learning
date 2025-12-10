@@ -2,7 +2,7 @@ import pickle
 import torch
 import pandas as pd
 
-from data import state_to_tensor
+from data import state_to_tensor, INDEX_TO_ACTION
 from architecture import PacmanNetwork
 
 
@@ -35,7 +35,11 @@ class SubmissionWriter:
         actions = []
         for state in self.test_set:
             x = state_to_tensor(state).unsqueeze(0)
-            # Your code here
+            with torch.no_grad():
+                logits = self.model(x)
+                pred_index = logits.argmax(dim=1).item()
+                action = INDEX_TO_ACTION[pred_index]
+                actions.append(action)
         return actions
 
     def write_csv(self, actions, file_name="submission"):

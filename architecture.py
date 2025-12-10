@@ -13,11 +13,11 @@ class PacmanNetwork(nn.Module):
 
     def __init__(
         self,
-        input_features=23, 
+        input_features=23,
         num_actions=5,
-        hidden_dims=[256, 128, 64], s
-        activation=nn.GELU(),
-        dropout=0.3  
+        hidden_dims=[256, 128, 64],
+        activation=nn.ReLU(),
+        dropout=0.3
     ):
         super().__init__()
 
