@@ -1,6 +1,245 @@
 PROJECT 2 - PACMAN IMITATION LEARNING - Documentation complète
 
 
+PARTIE 0 : Comment fonctionne un réseau de neurones ? (Pour les vrais débutants)
+
+   Si tu te demandes "mais c'est quoi tous ces trucs de gradients, loss, forward, backward",
+   cette section est pour toi. On explique TOUT depuis zéro.
+
+   ÉTAPE 1 : C'est quoi un réseau de neurones ?
+
+   Imagine une grosse fonction mathématique f(x) = y qui prend des inputs x et prédit des outputs y.
+   Par exemple :
+   - Input x = [position de Pacman, position du ghost, ...]
+   - Output y = quelle action choisir (NORTH, SOUTH, EAST, WEST, STOP)
+
+   Cette fonction contient des MILLIONS de nombres appelés "poids" (weights).
+   Au début, ces poids sont aléatoires → la fonction fait n'importe quoi.
+   L'entraînement = ajuster ces poids pour que la fonction fasse les bonnes prédictions.
+
+   ÉTAPE 2 : Forward Pass (Passage avant)
+
+   C'est le calcul de la prédiction. On fait passer l'input à travers le réseau.
+
+   Exemple concret avec Pacman :
+   1. Input : features = [0.25, 0.30, 0.8, ...]  (23 nombres)
+   2. Le réseau fait des calculs : Linear → BatchNorm → GELU → Dropout → Linear → ...
+   3. Output : logits = [2.1, 0.5, 3.2, 1.0, 0.3]
+
+      Interprétation :
+      [2.1, 0.5, 3.2, 1.0, 0.3]
+       ↑    ↑    ↑    ↑    ↑
+      NORTH SOUTH EAST WEST STOP
+
+   Le réseau prédit EAST car 3.2 est le plus grand nombre.
+
+   ÉTAPE 3 : La Loss (Mesure de l'erreur)
+
+   Problème : Le réseau a prédit EAST, mais l'expert voulait NORTH !
+
+   La loss mesure "à quel point le réseau s'est trompé" :
+   - Si le réseau prédit exactement la bonne action → loss = 0 (parfait)
+   - Si le réseau se trompe complètement → loss = très grand nombre (nul)
+
+   On utilise CrossEntropyLoss qui calcule :
+   Loss = -log(probabilité de la bonne action)
+
+   Dans notre exemple :
+   - Logits : [2.1, 0.5, 3.2, 1.0, 0.3]
+   - Softmax : [0.18, 0.04, 0.54, 0.06, 0.03]  (conversion en probabilités)
+   - Bonne action = NORTH (indice 0), probabilité = 0.18
+   - Loss = -log(0.18) = 1.71
+
+   Plus la probabilité est basse, plus la loss est grande.
+
+   ÉTAPE 4 : Backward Pass (Rétropropagation)
+
+   Maintenant qu'on sait que le réseau s'est trompé (loss = 1.71),
+   on veut ajuster les poids pour réduire cette erreur.
+
+   Question : Dans quelle direction faut-il bouger chaque poids ?
+   Réponse : Les GRADIENTS !
+
+   Le gradient d'un poids = dérivée de la loss par rapport à ce poids.
+   Il dit : "Si j'augmente ce poids de 0.01, la loss va augmenter/diminuer de combien ?"
+
+   Exemple :
+   - Poids w = 0.5
+   - Gradient = -0.3
+   - Signification : Si j'augmente w, la loss DIMINUE (c'est bien !)
+
+   loss.backward() calcule automatiquement TOUS les gradients pour TOUS les poids.
+   C'est de la magie mathématique (règle de la chaîne en calcul différentiel).
+
+   ÉTAPE 5 : Optimizer (Mise à jour des poids)
+
+   Maintenant qu'on a les gradients, on met à jour les poids.
+
+   FORMULE DE BASE (Gradient Descent classique) :
+   nouveau_poids = ancien_poids - learning_rate × gradient
+
+   Exemple :
+   - Ancien poids : w = 0.5
+   - Gradient : -0.3
+   - Learning rate : 0.0008
+   - Nouveau poids : w = 0.5 - 0.0008 × (-0.3) = 0.5 + 0.00024 = 0.50024
+
+   PROBLÈME avec Gradient Descent basique :
+   Tous les poids utilisent le MÊME learning rate (0.0008).
+   Mais certains poids ont besoin de gros changements, d'autres de petits changements !
+
+   SOLUTION : Adam (Adaptive Moment Estimation)
+
+   Adam est INTELLIGENT. Il regarde 2 choses pour adapter le learning rate de chaque poids :
+
+   1. Magnitude du gradient :
+      - Gradient FORT (grande pente) → On est loin du minimum → GRANDS pas pour avancer vite
+      - Gradient FAIBLE (petite pente) → On est proche du minimum → PETITS pas prudents
+
+   2. Stabilité du gradient (variance) :
+      - Gradients STABLES (direction constante) → Adam est CONFIANT → grands pas
+      - Gradients INSTABLES (direction change tout le temps) → Adam N'EST PAS CONFIANT → petits pas
+
+   Exemple concret pour un poids w :
+
+   GRADIENTS STABLES (confiant) :
+   Itération 1 : gradient = -0.5 (va à gauche)
+   Itération 2 : gradient = -0.52 (va à gauche)
+   Itération 3 : gradient = -0.48 (va à gauche)
+   → Direction claire et constante ! Adam fait de GRANDS pas à gauche
+
+   GRADIENTS INSTABLES (pas confiant) :
+   Itération 1 : gradient = +0.5 (va à droite)
+   Itération 2 : gradient = -0.3 (va à gauche)
+   Itération 3 : gradient = +0.2 (va à droite)
+   → Direction qui zigzague ! Adam hésite et fait de PETITS pas prudents
+
+   En gros : Adam fait de GRANDS pas quand il est sûr de la direction, et de PETITS pas quand il hésite.
+
+   Analogie visuelle :
+   Imagine que tu descends une montagne dans le brouillard pour trouver la vallée (le minimum) :
+
+   - Gradient FORT = pente raide → tu es loin du fond → tu cours vite (grands pas)
+   - Gradient FAIBLE = pente douce → tu es proche du fond → tu marches lentement (petits pas)
+
+   Gradient Descent classique : même vitesse partout
+   Adam : adapte la vitesse selon la pente ET la stabilité du terrain
+
+   Techniquement, Adam fait :
+   1. Calcule la MOYENNE des gradients récents (momentum)
+   2. Calcule la VARIANCE des gradients récents
+   3. Adapte le learning rate pour chaque poids individuellement
+
+   Résultat : Adam converge PLUS VITE et de manière PLUS STABLE que Gradient Descent classique.
+   C'est pour ça qu'on l'utilise (et presque tout le monde en deep learning l'utilise).
+
+   En résumé :
+   - Gradient Descent : learning_rate fixe pour tous les poids
+   - Adam : learning_rate adaptatif et intelligent pour chaque poids
+
+   ÉTAPE 6 : Le cycle complet (1 itération d'entraînement)
+
+   1. optim.zero_grad()
+      → Efface les anciens gradients (sinon ils s'accumulent)
+
+   2. loss = model.loss(features, actions)
+      → Forward pass : calcule la prédiction et la loss
+
+   3. loss.backward()
+      → Backward pass : calcule les gradients
+
+   4. optim.step()
+      → Met à jour les poids avec les gradients
+
+   On répète ce cycle des MILLIERS de fois (150 epochs × 47 batches = 7050 itérations).
+   À chaque itération, les poids s'améliorent un peu.
+
+   ÉTAPE 7 : Pourquoi des epochs et des batches ?
+
+   - 1 batch = groupe de 256 exemples traités ensemble
+   - 1 epoch = 1 passage sur TOUT le dataset (15018 exemples)
+   - Nombre de batches par epoch = 15018 / 256 = ~47 batches
+
+   Pourquoi des batches ?
+   - Traiter 256 exemples ensemble est plus efficace (parallélisation GPU)
+   - Le gradient sur 256 exemples est plus stable qu'un seul exemple
+
+   Pourquoi des epochs ?
+   - Le réseau a besoin de voir les exemples PLUSIEURS FOIS pour bien apprendre
+   - 1 epoch ne suffit pas, il faut 150 epochs pour converger
+
+   ÉTAPE 8 : Résumé visuel du pipeline
+
+   ENTRAÎNEMENT (on modifie les poids) :
+   ┌─────────────────────────────────────────────────────┐
+   │  for epoch in range(150):                          │
+   │    for batch in dataset:                           │
+   │                                                     │
+   │      1. features, actions = batch                  │
+   │         ↓                                           │
+   │      2. predictions = model(features)  [FORWARD]   │
+   │         ↓                                           │
+   │      3. loss = compare(predictions, actions)       │
+   │         ↓                                           │
+   │      4. loss.backward()  [BACKWARD → gradients]    │
+   │         ↓                                           │
+   │      5. optim.step()  [Update weights]             │
+   │         ↓                                           │
+   │      Les poids sont maintenant meilleurs !         │
+   └─────────────────────────────────────────────────────┘
+
+   ÉVALUATION (on teste, sans modifier les poids) :
+   ┌─────────────────────────────────────────────────────┐
+   │  with torch.no_grad():  [pas de gradients]         │
+   │    for batch in test_dataset:                      │
+   │                                                     │
+   │      1. features, actions = batch                  │
+   │         ↓                                           │
+   │      2. predictions = model(features)  [FORWARD]   │
+   │         ↓                                           │
+   │      3. accuracy = compare(predictions, actions)   │
+   │         ↓                                           │
+   │      On mesure la performance, c'est tout !        │
+   └─────────────────────────────────────────────────────┘
+
+   Différence clé :
+   - ENTRAÎNEMENT 80%: Forward → Loss → Backward → Update weights
+   - ÉVALUATION 20%: Forward → Accuracy (pas de backward, pas d'update)
+
+   ÉTAPE 9 : Pourquoi model.train() et model.eval() ?
+
+   model.train() :
+   - Active le dropout : désactive aléatoirement 30% des neurones
+   - Pourquoi ? Pour éviter l'overfitting (le réseau mémorise au lieu d'apprendre)
+
+   model.eval() :
+   - Désactive le dropout : utilise TOUS les neurones
+   - Pourquoi ? Pour avoir des prédictions stables et déterministes
+
+   ÉTAPE 10 : Analogie finale
+
+   Imagine que tu apprends à jouer au basket :
+   - Forward pass = tu tires au panier
+   - Loss = distance entre le ballon et le panier (ton erreur)
+   - Gradients = "j'aurais dû tirer plus fort" ou "plus à gauche"
+   - Optimizer = tu ajustes ta technique pour le prochain tir
+   - Epochs = tu t'entraînes pendant des semaines
+
+   Au début tu rates beaucoup (loss élevée).
+   Après 150 jours d'entraînement, tu réussis 87% de tes tirs (accuracy = 87%).
+
+   C'est exactement pareil pour le réseau de neurones !
+
+   Maintenant quand tu vois ce code :
+      loss = model.loss(features, actions)
+      optim.zero_grad()
+      loss.backward()
+      optim.step()
+
+   Tu comprends : "Ah oui, il calcule l'erreur, calcule les gradients,
+   et ajuste les poids pour faire mieux la prochaine fois !"
+
+
 PARTIE 1 : Vue d'ensemble
 
    But: apprendre à Pacman à imiter un expert en utilisant l'apprentissage supervisé.
@@ -10,7 +249,7 @@ PARTIE 1 : Vue d'ensemble
    Ordre de lecture : ici les 4 fichiers qu'on a modifié
    1. data.py - Convertit GameState en 23 features
    2. architecture.py - Définit le réseau MLP (23 → 256 → 128 → 64 → 5)
-   3. train.py - Entraîne le modèle (avec fonction visualization() pour les graphiques)
+   3. train.py - Entraîne le modèle (simple console output)
    4. pacmanagent.py - Utilise le modèle pour jouer
 
 
@@ -29,8 +268,7 @@ PARTIE 1 : Vue d'ensemble
    train.py (Entraînement)
    Split train/test 80/20, Adam optimizer, 150 epochs, batch_size=256.
    Utilise CrossEntropyLoss pour classification multi-classe (5 actions).
-   Évaluation finale sur le test set avec calcul de l'accuracy.
-   Code modulaire : fonction visualization() intégrée pour les graphiques.
+   Affiche l'accuracy à chaque epoch et sauvegarde le meilleur modèle.
 
    pacmanagent.py (Agent)
    Utilise le modèle entraîné pour jouer.
@@ -165,7 +403,7 @@ PARTIE 4 : Entraînement (train.py)
    Pipeline :
    1. Charger le dataset (15018 échantillons)
    2. Split train/test (80%/20%) avec random_split
-   3. Entraîner pendant 150 epochs avec visualisation
+   3. Entraîner pendant 150 epochs
    4. Évaluer sur test set et sauvegarder le modèle
 
    Hyperparamètres optimisés :
@@ -173,28 +411,11 @@ PARTIE 4 : Entraînement (train.py)
    - epochs = 150          → Assez d'epochs pour convergence complète
    - lr = 8e-4             → Learning rate légèrement élevé pour converger plus vite
    - test_ratio = 0.2      → 20% pour évaluation finale
-   - show_every = 30       → Fréquence de visualisation des plots
 
    Modifications importantes :
-   - Utilisation de tqdm/trange pour progression en temps réel
-   - Visualisation interactive de la loss + accuracy pendant l'entraînement
+   - Affichage simple de l'accuracy à chaque epoch
    - Évaluation du test set à chaque epoch
    - Checkpointing : sauvegarde automatique du meilleur modèle basé sur test accuracy
-
-   Visualisation (fonction visualization()) :
-   Fonction intégrée qui retourne deux fonctions pour gérer les graphiques :
-
-   1. setup_plots(num_plots)
-      - Crée une fenêtre unique avec grille de subplots
-      - Loss plots à gauche (Epoch 0, 30, 60, 90, 120, Final)
-      - Accuracy plot à droite (courbe continue)
-      - Retourne (fig, axes, ax_acc)
-
-   2. update_plots(axes, ax_acc, plot_idx, losses, ...)
-      - Met à jour les graphiques en temps réel
-      - Gère les mises à jour périodiques (toutes les 30 epochs)
-      - Gère la mise à jour finale (is_final=True)
-      - Refresh automatique avec plt.pause()
 
 
    Loss function : CrossEntropyLoss
@@ -336,13 +557,14 @@ PARTIE 6 : Questions possibles à l'oral - FAQ
 
    Q: Pourquoi CrossEntropyLoss?
    R: C'est la loss standard pour la classification multi-classe.
-   Combine LogSoftmax et NLLLoss efficacement.
+   Combine LogSoftmax et NLLLoss efficacement. Voir cours théorique.
 
    Q: Pourquoi les features de danger?
    R: Le modèle avait du mal à éviter les ghosts avec juste la distance.
    danger_level donne un gradient de danger,
    ghost_blocks_food dit si le chemin vers la food est dangereux,
    escape_options dit combien de fuites sont possibles.
+   C'est pr moi les features les + importantes.
 
    Q: Comment gérer les actions illégales?
    R: On trie les prédictions par probabilité et on prend la première action

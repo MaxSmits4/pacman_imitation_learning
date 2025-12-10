@@ -6,7 +6,6 @@ Following best practices from classic supervised learning cf MNIST ref[5] :
 - Normalize all features to similar scale ([0,1] range)
 - Convert game state to fixed-size feature vector
 - Map actions to integer indices for classification
-
 """
 
 import pickle
@@ -38,9 +37,9 @@ def state_to_tensor(state: object) -> torch.Tensor:
                  ghost_mantt_dist, ghost_adjacent
     - Food (4): n_food, direction_to_food_x, direction_to_food_y,
                 closest_food_dist
-    - Maze (5): dist_north, dist_south, dist_east, dist_west, is_corner
-    - Danger (5): danger_level, ghost_blocks_food, escape_options,
-                  ghost_in_direction_x, ghost_in_direction_y
+    - Maze (5): dist_north, dist_south, dist_east, dist_west, max_two_action 
+    - Danger (3): danger_level, ghost_blocks_food, escape_options,
+                
     - Legal (5): legal_north, legal_south, legal_east, legal_west, legal_stop
 
     Returns: Tensor of shape (23) 1D
@@ -52,12 +51,11 @@ def state_to_tensor(state: object) -> torch.Tensor:
     # Ghost info (4)
     ghost_positions = state.getGhostPositions()
     ghost_x, ghost_y = ghost_positions[0]
-    ghost_x, ghost_y = ghost_positions[0]
     ghost_mantt_dist = float(
         abs(pac_pos_x - ghost_x) + abs(pac_pos_y - ghost_y)
     )  # 1
-    direction_to_ghost_x = float(ghost_x - pac_pos_x)  # 2
-    direction_to_ghost_y = float(ghost_y - pac_pos_y)  # 3
+    dist_to_ghost_x = float(ghost_x - pac_pos_x)  # 2
+    dist_to_ghost_y = float(ghost_y - pac_pos_y)  # 3
     ghost_adjacent = 1.0 if ghost_mantt_dist == 1.0 else 0.0  # 4
 
     # Food info (4)
@@ -67,72 +65,57 @@ def state_to_tensor(state: object) -> torch.Tensor:
 
     if food_positions:
         # Find closest food
-        distances_to_all_foods = [
-            abs(pac_pos_x - fx) + abs(pac_pos_y - fy)
-            for fx, fy in food_positions
-        ]
-        closest_food_index = int(
-            torch.argmin(torch.tensor(distances_to_all_foods))
-        )
+        distances_to_all_foods = []
+        for fx, fy in food_positions:
+            distances_to_all_foods.append(abs(pac_pos_x - fx) + abs(pac_pos_y - fy))
+
+        closest_food_index = distances_to_all_foods.index(min(distances_to_all_foods))
         closest_food_x, closest_food_y = food_positions[closest_food_index]
-        closest_food_dist = float(distances_to_all_foods[closest_food_index])
+        closest_food_dist = float(distances_to_all_foods[closest_food_index]) # 4
         direction_to_food_x = float(closest_food_x - pac_pos_x)  # 2
         direction_to_food_y = float(closest_food_y - pac_pos_y)  # 3
     else:
         closest_food_dist = 0.0  # 4
-        direction_to_food_x = 0.0
-        direction_to_food_y = 0.0
+        direction_to_food_x = 0.0 # 2
+        direction_to_food_y = 0.0 # 3
 
     # Maze geometry (5)
     W = state.getWalls()
     maze_W, maze_H = W.width, W.height
 
-    def dist_until_wall(x, y, dx, dy):
-        """Count free cells in direction (dx, dy) before hitting wall"""
-        distance = 0
-        while True:
-            x += dx
-            y += dy
-            if not (0 <= x < maze_W and 0 <= y < maze_H) or W[x][y]:
-                break
-            distance += 1
-        return float(distance)
-
-    dist_north = dist_until_wall(pac_pos_x, pac_pos_y, 0, 1)  # 1
-    dist_south = dist_until_wall(pac_pos_x, pac_pos_y, 0, -1)  # 2
-    dist_east = dist_until_wall(pac_pos_x, pac_pos_y, 1, 0)  # 3
-    dist_west = dist_until_wall(pac_pos_x, pac_pos_y, -1, 0)  # 4
-    is_corner = (
-        1.0 if sum(
-            1 for d in [dist_north, dist_south, dist_east, dist_west]
-            if d > 0
-        ) <= 2 else 0.0
-    )  # 5
+    dist_north = dist_until_wall(pac_pos_x, pac_pos_y, 0, 1, W)  # 1
+    dist_south = dist_until_wall(pac_pos_x, pac_pos_y, 0, -1, W)  # 2
+    dist_east = dist_until_wall(pac_pos_x, pac_pos_y, 1, 0, W)  # 3
+    dist_west = dist_until_wall(pac_pos_x, pac_pos_y, -1, 0, W)  # 4
+    max_two_action = 1.0 if len(state.getLegalPacmanActions()) <= 2 else 0.0  # 5
 
     # Danger features (3)
     legal_actions = state.getLegalPacmanActions()
 
-    # Avoid division by zero and cap danger level to 2
+    # Avoid division by zero and cap danger level to 2 - 1/x fct
     danger_level = 1.0 / max(ghost_mantt_dist, 0.5)  # 1
 
     ghost_blocks_food = 0.0  # 2
     if ghost_positions and food_positions:
         same_direction = (
-            direction_to_ghost_x * direction_to_food_x > 0
-            or direction_to_ghost_y * direction_to_food_y > 0
+            dist_to_ghost_x * direction_to_food_x > 0
+            or dist_to_ghost_y * direction_to_food_y > 0
         )
         if same_direction and ghost_mantt_dist < closest_food_dist:
             ghost_blocks_food = 1.0
 
-    escape_options = sum(
+    escape_options_ratio = sum(
         1.0 for a in legal_actions if a != Directions.STOP
     ) / 4.0  # 3
 
     # Legal actions (5)
-    legal_flags = [
-        1.0 if action in legal_actions else 0.0 for action in ACTIONS
-    ]
-
+    legal_flags = []
+    for action in ACTIONS:
+        if action in legal_actions:
+            legal_flags.append(1.0)
+        else:
+            legal_flags.append(0.0)
+            
     # Normalize based on actual maze dimensions
     # Maximum Manhattan distance is from one corner to the opposite corner
     max_manhattan_dist = (maze_W - 1) + (maze_H - 1)
@@ -142,8 +125,8 @@ def state_to_tensor(state: object) -> torch.Tensor:
         float(pac_pos_x) / float(maze_W),
         float(pac_pos_y) / float(maze_H),
         # Ghost (4) - directions in X/Y normalized separately, distance by max
-        direction_to_ghost_x / float(maze_W),  # X-direction
-        direction_to_ghost_y / float(maze_H),  # Y-direction
+        dist_to_ghost_x / float(maze_W),  # X-direction
+        dist_to_ghost_y / float(maze_H),  # Y-direction
         ghost_mantt_dist / float(max_manhattan_dist),  # Manhattan distance
         ghost_adjacent,
         # Food (4)
@@ -156,17 +139,27 @@ def state_to_tensor(state: object) -> torch.Tensor:
         dist_south / float(maze_H),
         dist_east / float(maze_W),
         dist_west / float(maze_W),
-        is_corner,
+        max_two_action,
         # Danger (3)
         danger_level / 2.0,  # Normalize danger_level to [0, 1] range
         ghost_blocks_food,
-        escape_options,
+        escape_options_ratio,
         # Legal actions (5)
         *legal_flags,
     ]
 
     return torch.tensor(features, dtype=torch.float32)
 
+def dist_until_wall(x, y, dx, dy, W):
+        """Count free cells in direction (dx, dy) before hitting wall"""
+        distance = 0
+        while True:
+            x += dx
+            y += dy
+            if not (0 <= x < W.width and 0 <= y < W.height) or W[x][y]:
+                break
+            distance += 1
+        return float(distance)
 
 class PacmanDataset(Dataset):
     """

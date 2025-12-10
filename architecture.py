@@ -13,11 +13,11 @@ class PacmanNetwork(nn.Module):
 
     def __init__(
         self,
-        input_features=23,  # Retour à 23 features originales
+        input_features=23, 
         num_actions=5,
-        hidden_dims=[256, 128, 64],  # Plus de capacité: 23 → 256 → 128 → 64 → 5
+        hidden_dims=[256, 128, 64], s
         activation=nn.GELU(),
-        dropout=0.3  # Plus de dropout car réseau plus grand
+        dropout=0.3  
     ):
         super().__init__()
 

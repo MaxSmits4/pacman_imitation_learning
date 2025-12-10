@@ -8,8 +8,48 @@ Train a neural network to imitate an expert Pacman player. The model learns from
 
 ## Installation
 
+### Prérequis
+- Anaconda ou Miniconda installé
+- Python 3.8+
+
+### Créer et configurer l'environnement conda
+
+**1. Créer l'environnement conda :**
 ```bash
-pip install torch pandas
+conda create -n pacman python=3.10 -y
+```
+
+**2. Activer l'environnement :**
+```bash
+conda activate pacman
+```
+
+**3. Installer PyTorch (avec support GPU) :**
+```bash
+conda install pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvidia -y
+```
+
+**OU pour CPU uniquement :**
+```bash
+conda install pytorch torchvision torchaudio cpuonly -c pytorch -y
+```
+
+**4. Installer les autres dépendances :**
+
+**Méthode simple (recommandée) - Utiliser requirements.txt :**
+```bash
+pip install -r requirements.txt
+```
+Le fichier `requirements.txt` contient : torch, torchvision, einops
+
+**OU manuellement :**
+```bash
+pip install einops
+```
+
+### Vérifier l'installation
+```bash
+python -c "import torch; print(f'PyTorch: {torch.__version__}'); print(f'CUDA disponible: {torch.cuda.is_available()}')"
 ```
 
 ## Usage
