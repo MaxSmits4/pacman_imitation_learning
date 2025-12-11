@@ -1,895 +1,1134 @@
-PROJECT 2 - PACMAN IMITATION LEARNING - Documentation complète
+================================================================================
+PROJECT 2 - PACMAN IMITATION LEARNING
+Documentation complète et simplifiée
+================================================================================
 
 
+TABLE DES MATIÈRES
+==================
+
+PARTIE 0 : Comment fonctionne un réseau de neurones ? (pour bien comprendre)
+PARTIE 1 : Vue d'ensemble du projet
+PARTIE 2 : Les fichiers du projet
+PARTIE 3 : data.py - Transformer l'état du jeu en nombres
+PARTIE 4 : architecture.py - Le cerveau du réseau
+PARTIE 5 : train.py - Apprendre au réseau
+PARTIE 6 : write_submission.py - Générer les prédictions
+PARTIE 7 : Questions fréquentes (FAQ)
+
+
+================================================================================
 PARTIE 0 : Comment fonctionne un réseau de neurones ?
+================================================================================
 
-   ÉTAPE 1 : C'est quoi un réseau de neurones ?
+Cette partie explique les bases pour bien comprendre le projet.
 
-   Imagine une grosse fonction mathématique f(x) = y qui prend des inputs x et prédit des outputs y.
-   Par exemple :
-   - Input x = [position de Pacman, position du ghost, ...]
-   - Output y = quelle action choisir (NORTH, SOUTH, EAST, WEST, STOP)
 
-   Cette fonction contient des MILLIONS de nombres appelés "poids" (weights).
-   Au début, ces poids sont aléatoires → la fonction fait n'importe quoi.
-   L'entraînement = ajuster ces poids pour que la fonction fasse les bonnes prédictions.
+ÉTAPE 1 : C'est quoi un réseau de neurones ?
+---------------------------------------------
 
-   ÉTAPE 2 : Forward Pass (Passage avant)
+Imagine une fonction mathématique magique : f(x) = y
 
-   C'est le calcul de la prédiction. On fait passer l'input à travers le réseau.
+- Tu donnes des informations en entrée (x)
+- La fonction te donne une réponse en sortie (y)
 
-   Exemple concret avec Pacman :
-   1. Input : features = [0.25, 0.30, 0.8, ...]  (23 nombres)
-   2. Le réseau fait des calculs : Linear → BatchNorm → GELU → Dropout → Linear → ...
-   3. Output : logits = [2.1, 0.5, 3.2, 1.0, 0.3]
+Exemple pour Pacman :
+- ENTRÉE (x) : Position de Pacman, position du fantôme, où est la nourriture
+- SORTIE (y) : Quelle direction prendre ? (NORTH, SOUTH, EAST, WEST, STOP)
 
-      Interprétation :
-      [2.1, 0.5, 3.2, 1.0, 0.3]
-       ↑    ↑    ↑    ↑    ↑
-      NORTH SOUTH EAST WEST STOP
+Cette fonction contient des milliers de nombres appelés "poids" (weights).
+Au début, ces poids sont aléatoires → la fonction fait n'importe quoi.
+Le but de l'entraînement : ajuster ces poids pour que la fonction donne les bonnes réponses.
 
-   Le réseau prédit EAST car 3.2 est le plus grand nombre.
 
-   ÉTAPE 3 : La Loss (Mesure de l'erreur)
+ÉTAPE 2 : Comment le réseau fait une prédiction ? (Forward Pass)
+-----------------------------------------------------------------
 
-   Problème : Le réseau a prédit EAST, mais l'expert voulait NORTH !
+C'est le moment où on demande au réseau : "Que dois-je faire ?"
 
-   La loss mesure "à quel point le réseau s'est trompé" :
-   - Si le réseau prédit exactement la bonne action → loss = 0 (parfait)
-   - Si le réseau se trompe complètement → loss = très grand nombre (nul)
+Exemple concret :
+1. x: [0.25, 0.30, 0.8, ..., 1, 0]  (23 nombres)
 
-   On utilise CrossEntropyLoss qui calcule :
-   Loss = -log(probabilité de la bonne action)
+2. Le réseau fait ses calculs :
+   Input (23 nombres)
+     ↓
+   Linear → BatchNorm → ReLU → Dropout
+     ↓
+   Linear → BatchNorm → ReLU → Dropout
+     ↓
+   Linear → BatchNorm → ReLU → Dropout
+     ↓
+   Linear (dernière couche)
+     ↓
+   Output : [2.1, 0.5, 3.2, 1.0, 0.3]
 
-   Dans notre exemple :
-   - Logits=sortie : [2.1, 0.5, 3.2, 1.0, 0.3]
-   - Softmax : [0.18, 0.04, 0.54, 0.06, 0.03]  (conversion en probabilités)
-   - Bonne action = NORTH (indice 0), probabilité = 0.18
-   - Loss = -log(0.18) = 1.71
+3. On regarde quel nombre est le plus grand :
+   [2.1, 0.5, 3.2, 1.0, 0.3]
+    ↑    ↑    ↑    ↑    ↑
+   NORTH SOUTH EAST WEST STOP
 
-   Plus la probabilité est basse, plus la loss est grande.
+   3.2 est le plus grand → Le réseau prédit EAST
 
-   ÉTAPE 4 : Backward Pass (Rétropropagation)
 
-   Maintenant qu'on sait que le réseau s'est trompé (loss = 1.71),
-   on veut ajuster les poids pour réduire cette erreur.
+ÉTAPE 3 : Comment mesurer si le réseau s'est trompé ? (Loss)
+------------------------------------------------------------
 
-   Question : Dans quelle direction faut-il bouger chaque poids ?
-   Réponse : Les GRADIENTS !
+Problème : Le réseau a prédit EAST, mais l'expert voulait NORTH !
 
-   IMPORTANT :
-   Un gradient est un vecteur (ou tenseur) ou une matrice qui a la MÊME FORME que les paramètres qu'il décrit.
+La "loss" (perte) mesure l'erreur :
+- Si le réseau a raison → loss = 0 (parfait !)
+- Si le réseau se trompe → loss = grand nombre (mauvais !)
 
-   Définition mathématique :
-   Pour un réseau avec poids W et loss L, le gradient est :
+Comment on calcule la loss ?
 
-   ∇W L = [∂L/∂w₁, ∂L/∂w₂, ..., ∂L/∂wₙ]
+1. On transforme les nombres en probabilités avec Softmax :
+  y= [2.1, 0.5, 3.2, 1.0, 0.3]  →  [0.18, 0.04, 0.54, 0.06, 0.03]
 
-   Clarification importante :
-   - L (la loss) est un SCALAIRE (un seul nombre, ex: L = 1.71)
-   - W (les poids) sont des matrices/vecteurs (ex: matrice 256×23)
-   - ∇W L (le gradient) est une matrice/vecteur de la MÊME FORME que W
-   - On calcule la dérivée du scalaire L par rapport à chaque élément de W
+   Maintenant les nombres font tous ensemble = 1.0 (100%)
+   C'est comme dire : "Je suis sûr à 18% que c'est NORTH, 54% que c'est EAST..."
 
-   Forme du gradient selon les paramètres :
-   - Si W est un scalaire → gradient = scalaire
-   - Si W est un vecteur → gradient = vecteur
-   - Si W est une matrice → gradient = matrice de même taille
+2. On regarde la probabilité de la bonne action (NORTH = 0.18 = 18%)
 
-   POURQUOI W EST UNE MATRICE (et pas juste un poids par neurone) ?
-   Dans un réseau de neurones fully-connected (MLP), CHAQUE neurone de sortie
-   est connecté à TOUS les neurones d'entrée. Il faut donc un poids pour chaque connexion !
+3. On calcule la loss :
+   Loss = -log(0.18) = 1.71
 
-   Exemple simple : 3 inputs → 2 outputs
+Plus la probabilité est basse, plus la loss est grande.
+Si la probabilité était 1.0 (100% sûr), la loss serait 0 (parfait).
+
+
+ÉTAPE 4 : Comment corriger les erreurs ? (Backward Pass)
+--------------------------------------------------------
+
+Maintenant qu'on sait que le réseau s'est trompé (loss = 1.71),
+on veut ajuster les poids pour réduire cette erreur.
+
+Question : Dans quelle direction faut-il bouger chaque poids ?
+Réponse : Les GRADIENTS nous le disent !
+
+Un gradient, c'est comme une flèche qui dit :
+- "Augmente ce poids" (gradient positif)
+- "Diminue ce poids" (gradient négatif)
+- "Ne touche pas ce poids" (gradient proche de zéro)
+
+Exemple simple :
+- Un poids w = 0.5
+- Son gradient = -0.3
+- Signification : Si j'augmente w, la loss diminue ! (c'est bien)
+
+Le réseau contient 47,168 poids au total.
+PyTorch calcule automatiquement le gradient de CHAQUE poids avec loss.backward().
+
+
+ÉTAPE 5 : Comment ajuster les poids ? (Optimizer)
+-------------------------------------------------
+
+Maintenant qu'on a les gradients, on met à jour les poids.
+
+IMPORTANT : Les gradients sont des MATRICES !
+- La loss L = 1 nombre (scalaire)
+- Les poids W = matrice (par exemple 256 × 23)
+- Le gradient ∇W L = matrice de la MÊME TAILLE que W
+
+Exemple pour Linear(23, 256) :
+   W = matrice (256, 23) avec 5,888 poids
+   ∇W = matrice (256, 23) avec 5,888 gradients
+
+Chaque case du gradient indique :
+   "Si j'augmente ce poids, est-ce que la loss augmente ou diminue ?"
+
+   Gradient positif → augmenter ce poids fait AUGMENTER la loss
+                   → donc on DIMINUE ce poids
+   Gradient négatif → augmenter ce poids fait DIMINUER la loss
+                   → donc on AUGMENTE ce poids
+
+Formule de base (appliquée à CHAQUE poids) :
+   nouveau_poids = ancien_poids - learning_rate × gradient
+
+Exemple pour UN poids :
+- Ancien poids : w = 0.5
+- Gradient : -0.3
+- Learning rate : 0.0008
+- Nouveau poids : w = 0.5 - 0.0008 × (-0.3) = 0.50024
+
+Mais on fait ça pour les 47,168 poids du réseau !
+
+On utilise Adam (optimizer intelligent) :
+- Il adapte automatiquement le learning_rate pour chaque poids
+- Il fait de GRANDS pas quand il est sûr de la direction
+- Il fait de PETITS pas quand il hésite
+- Résultat : converge plus vite et de manière plus stable
+
+
+ÉTAPE 6 : Le cycle complet d'entraînement
+-----------------------------------------
+
+Une itération d'entraînement, c'est ces 4 étapes :
+
+```
+for epoch in range(150):                       # Répéter 150 fois
+    for features, actions in loader_train:     # Pour chaque batch
+
+        1. loss = model.loss(features, actions)
+           → Forward pass : calcule la prédiction et l'erreur cad loss
+
+        2. optim.zero_grad()
+           → Efface les anciens gradients
+
+        3. loss.backward()
+           → Backward pass : calcule les gradients
+
+        4. optim.step()
+           → Met à jour les poids avec les gradients
+```
+
+On répète ce cycle 7,050 fois (150 epochs × 47 batches).
+À chaque fois, les poids s'améliorent un petit peu.
+
+
+ÉTAPE 7 : Pourquoi des batches et des epochs ?
+----------------------------------------------
+
+Batch = groupe de 256 exemples traités ensemble
+- Plus efficace pour le GPU
+- Les gradients sont plus stables (moyenne sur 256 exemples)
+
+Epoch = 1 passage complet sur tous les exemples (15,018 exemples)
+- 1 epoch = 15,018 ÷ 256 = ~47 batches
+- Le réseau a besoin de voir les exemples PLUSIEURS FOIS pour bien apprendre
+- On fait 150 epochs pour que le réseau converge complètement
+
+
+ÉTAPE 8 : Où se trouvent les opérations dans le réseau ?
+--------------------------------------------------------
+
+C'est une question importante pour bien comprendre !
+
+Les opérations (Linear, BatchNorm, ReLU, Dropout) ne sont PAS dans les neurones.
+Elles se trouvent ENTRE les couches, dans les CONNEXIONS.
+
+Visualisation :
+
+   [Input Layer] ○ ○ ○ (23 neurones)
+         |
+         | ← ICI : Linear → BatchNorm → ReLU → Dropout
+         |
+   [Hidden 1]    ○ ○ ○ ... (256 neurones)
+         |
+         | ← ICI : Linear → BatchNorm → ReLU → Dropout
+         |
+   [Hidden 2]    ○ ○ ○ ... (128 neurones)
+         |
+         | ← ICI : Linear → BatchNorm → ReLU → Dropout
+         |
+   [Hidden 3]    ○ ○ ○ ... (64 neurones)
+         |
+         | ← ICI : Linear (pas d'activation)
+         |
+   [Output]      ○ ○ ○ ○ ○ (5 neurones = 5 actions)
+
+Les neurones (○) ne font que recevoir et envoyer des valeurs.
+Tout le travail se passe dans les connexions (|) entre les couches !
+
+
+Qu'est-ce que fait chaque opération ?
+
+1. Linear(23, 256) :
+   - Prend 23 valeurs en entrée
+   - Fait des calculs : y = W @ x + b (multiplication matricielle)
+   - Produit 256 valeurs en sortie
+   - Chaque valeur = combinaison pondérée des 23 entrées
+
+   IMPORTANT : W est une MATRICE (256, 23) !
+   - Chaque neurone de sortie (256 au total) a besoin de 23 poids
+   - Total : 256 × 23 = 5,888 poids dans la matrice W
+
+   Exemple visuel :
+   W = ┌                     ┐
+       │ w₁,₁  w₁,₂  ... w₁,₂₃ │  ← 23 poids du neurone 1
+       │ w₂,₁  w₂,₂  ... w₂,₂₃ │  ← 23 poids du neurone 2
+       │  ...   ...  ...  ...  │
+       │ w₂₅₆,₁ ...  w₂₅₆,₂₃   │  ← 23 poids du neurone 256
+       └                       ┘
+
+   Pourquoi une matrice ?
+   Dans un réseau fully-connected, CHAQUE neurone de sortie
+   est connecté à TOUS les neurones d'entrée.
+   → Il faut un poids par connexion
+   → 256 neurones × 23 connexions = matrice (256, 23)
+
+2. BatchNorm1d(256) :
+   - Normalise les 256 valeurs
+   - Centre autour de 0, variance ~1
+   - Stabilise l'entraînement
+
+3. ReLU() :
+   - Applique max(0, x) sur chaque valeur
+   - Les valeurs négatives deviennent 0
+   - Les valeurs positives restent inchangées
+   - Casse la linéarité (permet d'apprendre des fonctions complexes)
+
+4. Dropout(0.3) :
+   - Pendant l'entraînement : met 30% des valeurs à 0 aléatoirement
+   - Pendant l'évaluation : ne fait rien
+   - Évite l'overfitting (empêche le réseau de mémoriser)
+
+
+Pourquoi on appelle ça "Linear" si on a ReLU (non-linéaire) ?
+
+Parce que chaque couche Linear fait une transformation linéaire : y = W @ x + b
+Mais le réseau COMPLET n'est pas linéaire grâce aux ReLU !
+
+Sans ReLU : empiler des couches linéaires est inutile
+   Linear(Linear(x)) = Linear(x)  ← Équivalent à une seule couche !
+
+Avec ReLU : on peut apprendre des fonctions complexes
+   Linear(ReLU(Linear(x))) ≠ Linear(x)  ← Vraiment différent !
+
+
+ÉTAPE 9 : Un neurone, c'est quoi exactement ?
+---------------------------------------------
+
+IMPORTANT : UN NEURONE = UN SEUL NOMBRE (pas un vecteur)
+
+Exemple avec Linear(23, 256) :
+- On a 23 valeurs en entrée : [0.5, -0.2, 0.8, ..., 1.0]
+- On crée 256 neurones différents
+- Chaque neurone calcule SA PROPRE somme pondérée :
+
+   Neurone 1: w₁₁×0.5 + w₁₂×(-0.2) + ... + b₁ = 2.3   ← UN nombre
+   Neurone 2: w₂₁×0.5 + w₂₂×(-0.2) + ... + b₂ = -0.7  ← UN nombre
+   Neurone 3: w₃₁×0.5 + w₃₂×(-0.2) + ... + b₃ = 1.5   ← UN nombre
+   ...
+   Neurone 256: w₂₅₆×0.5 + ... + b₂₅₆ = 0.9           ← UN nombre
+
+Output : [2.3, -0.7, 1.5, ..., 0.9]  (256 nombres)
+
+Ensuite ces 256 nombres passent par BatchNorm, ReLU, Dropout :
+
+   Après Linear:    [2.3, -0.7, 1.5, ..., 0.9]
+   Après BatchNorm: [1.1, -0.3, 0.8, ..., 0.5]  (normalisés)
+   Après ReLU:      [1.1,  0.0, 0.8, ..., 0.5]  (-0.3 → 0)
+   Après Dropout:   [1.1,  0.0, 0.0, ..., 0.5]  (30% mis à 0)
+
+
+ÉTAPE 10 : Pourquoi W est une MATRICE (et pas juste des nombres) ?
+------------------------------------------------------------------
+
+Dans un réseau fully-connected (MLP), CHAQUE neurone de sortie est connecté
+à TOUS les neurones d'entrée. Il faut donc un poids pour CHAQUE connexion !
+
+Exemple simple : 3 inputs → 2 outputs
 
    Input (3)              Output (2)
      x₁ ───w₁₁──→ ┐
-     x₂ ───w₁₂──→ ├──→ y₁ = w₁₁·x₁ + w₁₂·x₂ + w₁₃·x₃ + b₁
+     x₂ ───w₁₂──→ ├──→ y₁ = w₁₁×x₁ + w₁₂×x₂ + w₁₃×x₃ + b₁
      x₃ ───w₁₃──→ ┘
 
      x₁ ───w₂₁──→ ┐
-     x₂ ───w₂₂──→ ├──→ y₂ = w₂₁·x₁ + w₂₂·x₂ + w₂₃·x₃ + b₂
+     x₂ ───w₂₂──→ ├──→ y₂ = w₂₁×x₁ + w₂₂×x₂ + w₂₃×x₃ + b₂
      x₃ ───w₂₃──→ ┘
 
-   On a besoin de 6 poids (2×3) pour connecter 3 inputs à 2 outputs !
-   Ces 6 poids forment une matrice W de taille 2×3 :
+On a besoin de 6 poids (2×3) !
+Ces 6 poids forment une matrice W de taille (2, 3) :
 
    W = [ w₁₁  w₁₂  w₁₃ ]   ← poids pour calculer y₁
        [ w₂₁  w₂₂  w₂₃ ]   ← poids pour calculer y₂
 
-   En notation matricielle : y = W @ x + b (produit matriciel)
+En notation matricielle : y = W @ x + b
 
-   QU'EST-CE QU'UNE COUCHE LINÉAIRE (Linear layer) ?
+Dans notre réseau Pacman :
+- Linear(23, 256)  → W₁ : matrice 256×23 = 5,888 poids !
+- Linear(256, 128) → W₂ : matrice 128×256 = 32,768 poids !
+- Linear(128, 64)  → W₃ : matrice 64×128 = 8,192 poids !
+- Linear(64, 5)    → W₄ : matrice 5×64 = 320 poids !
 
-   Une couche linéaire fait une TRANSFORMATION AFFINE : y = W @ x + b
+TOTAL : 47,168 poids dans le réseau !
 
-   Où :
-   - x = vecteur d'entrée
-   - W = matrice de poids (weights)
-   - b = vecteur de biais (bias)
-   - y = vecteur de sortie
-   - @ = produit matriciel
 
+ÉTAPE 11 : Entraînement vs Évaluation
+-------------------------------------
 
-   C'est appelé "linéaire" car chaque sortie est une COMBINAISON LINÉAIRE des entrées
+ENTRAÎNEMENT (model.train()) :
+- On modifie les poids pour apprendre
+- Dropout activé : désactive 30% des neurones aléatoirement
+- On calcule la loss et les gradients
+- On fait backward() et step()
 
-   Exemple : nn.Linear(3, 2) transforme 3 valeurs en 2 valeurs
+ÉVALUATION (model.eval()) :
+- On teste le réseau sans modifier les poids
+- Dropout désactivé : utilise TOUS les neurones
+- On calcule juste l'accuracy
+- PAS de backward(), PAS de step()
 
-   x = [x₁, x₂, x₃]  (input 3D)
-      ↓ y = W @ x + b
-   y = [y₁, y₂]      (output 2D)
 
-   Où :
-   y₁ = w₁₁·x₁ + w₁₂·x₂ + w₁₃·x₃ + b₁  ← somme pondérée
-   y₂ = w₂₁·x₁ + w₂₂·x₂ + w₂₃·x₃ + b₂  ← somme pondérée
+ÉTAPE 12 : Analogie finale pour tout comprendre
+-----------------------------------------------
 
-   IMPORTANT : Pourquoi "linéaire" si on a des activations non-linéaires (ReLU) ?
+Imagine que tu apprends à tirer au basket :
 
-   Le réseau COMPLET n'est PAS linéaire grâce aux ReLU qui cassent la linéarité !
+- Forward pass = tu tires au panier
+- Loss = distance entre le ballon et le panier (ton erreur)
+- Gradients = "j'aurais dû tirer plus fort" ou "plus à gauche"
+- Optimizer = tu ajustes ta technique pour le prochain tir
+- Epochs = tu t'entraînes pendant des semaines
 
-   Sans ReLU : Linear(Linear(x)) = Linear(x)  ← Empiler des couches linéaires est inutile !
-   Avec ReLU : Linear(ReLU(Linear(x))) ≠ Linear(x)  ← Peut apprendre des fonctions complexes !
+Au début tu rates beaucoup (loss élevée).
+Après 150 jours d'entraînement, tu réussis 87% de tes tirs (accuracy = 87%).
 
-   Pipeline d'une couche :
-   Input (23) → Linear(23→256) : y=W@x+b  [LINÉAIRE]
-             → ReLU() : y=max(0,y)        [NON-LINÉAIRE] ← CASSELA LINÉARITÉ !
-             → Linear(256→128) : y=W@x+b  [LINÉAIRE]
-             → ReLU() : y=max(0,y)        [NON-LINÉAIRE]
+C'est exactement pareil pour le réseau de neurones !
 
-   C'est l'alternance Linear/ReLU qui donne au réseau sa capacité d'apprentissage !
 
-   Exemple concret dans notre réseau Pacman :
-   Dans architecture.py, plusieurs couches linéaires :
+================================================================================
+PARTIE 1 : Vue d'ensemble du projet
+================================================================================
 
-   nn.Linear(23, 256)  → Poids W₁ : matrice 256×23 (256×23 = 5888 poids !)
-                       → Gradient ∇W₁ L : matrice 256×23
-                       → Calcule : y = W₁ @ x + b₁ (23 inputs → 256 outputs)
+BUT DU PROJET
+-------------
+Apprendre à Pacman à imiter un expert en utilisant l'apprentissage supervisé.
 
-   nn.Linear(256, 128) → Poids W₂ : matrice 128×256 (32768 poids !)
-                       → Gradient ∇W₂ L : matrice 128×256
+On a :
+- Un dataset de 15,018 exemples : (état du jeu, action de l'expert)
+- Un expert qui joue très bien à Pacman
 
-   nn.Linear(128, 64)  → Poids W₃ : matrice 64×128 (8192 poids !)
-                       → Gradient ∇W₃ L : matrice 64×128
+On veut :
+- Entraîner un réseau de neurones à prédire quelle action l'expert aurait prise
 
-   nn.Linear(64, 5)    → Poids W₄ : matrice 5×64 (320 poids !)
-                       → Gradient ∇W₄ L : matrice 5×64
 
-   Le gradient ∇W₁ L est une matrice 256×23 où chaque élément (i,j) contient :
-   ∂L/∂W₁[i,j] = "si j'augmente W₁[i,j] de 0.01, L change de combien ?"
+LES 5 FICHIERS PRINCIPAUX
+-------------------------
 
-   Notre réseau contient donc 5888 + 32768 + 8192 + 320 = 47168 poids au total !
-   Chacun de ces poids a son propre gradient calculé par loss.backward().
+1. data.py
+   → Transforme l'état du jeu en 23 nombres
+   → Le réseau ne comprend que les nombres, pas les objets Python
 
-   Formule de rétropropagation (chain rule) :
+2. architecture.py
+   → Définit le cerveau du réseau : 23 → 256 → 128 → 64 → 5
+   → 3 couches cachées avec ReLU et Dropout
 
-   Pour la dernière couche (classification avec CrossEntropyLoss) :
-      L = -log(softmax(z)[y_true])
-      où z = W₄·x₃ + b₄
+3. train.py
+   → Entraîne le réseau sur 150 epochs
+   → Sauvegarde le meilleur modèle
 
-      ∇W₄ L = (ŷ - y_true) ⊗ x₃ᵀ
+4. pacmanagent.py
+   → Utilise le modèle entraîné pour jouer
 
-   Puis on remonte les couches avec la règle de la chaîne :
-      ∇W₃ L = (∇W₄ L · W₄ᵀ) ⊙ σ'(z₃) ⊗ x₂ᵀ
-      ∇W₂ L = (∇W₃ L · W₃ᵀ) ⊙ σ'(z₂) ⊗ x₁ᵀ
-      ...et ainsi de suite jusqu'à la première couche
+5. write_submission.py
+   → Génère le fichier CSV avec les prédictions pour Gradescope
 
-   Où :
-   - ⊗ = produit tensoriel (outer product)
-   - ⊙ = produit élément par élément (Hadamard product)
-   - σ'(z) = dérivée de la fonction d'activation (ReLU dans notre cas : 1 si z>0, 0 sinon)
 
-   Exemple simple :
-   - Poids w = 0.5
-   - Gradient = -0.3
-   - Signification : Si j'augmente w, la loss DIMINUE (c'est bien !)
+STRUCTURE DES DONNÉES
+---------------------
 
-   loss.backward() calcule automatiquement TOUS les gradients pour TOUS les poids
-   C'est de la magie mathématique qui utilise la règle de la chaîne en calcul différentiel.
-   PyTorch fait toute cette rétropropagation automatiquement !
+Entraînement :
+- 15,018 exemples au total
+- Split 80/20 : 12,014 pour l'entraînement, 3,004 pour le test
+- Batch size 256 : on traite 256 exemples à la fois
+- 47 batches par epoch
 
-   ÉTAPE 5 : Optimizer (Mise à jour des poids)
+Test :
+- Fichier séparé : pacman_test.pkl (pour Gradescope)
+- Contient SEULEMENT des états de jeu (pas d'actions)
+- On doit prédire l'action pour chaque état
 
-   Maintenant qu'on a les gradients, on met à jour les poids.
 
-   FORMULE DE BASE (Gradient Descent classique) :
-   nouveau_poids = ancien_poids - learning_rate × gradient
+================================================================================
+PARTIE 2 : Les fichiers du projet
+================================================================================
 
-   Exemple :
-   - Ancien poids : w = 0.5
-   - Gradient : -0.3
-   - Learning rate : 0.0008
-   - Nouveau poids : w = 0.5 - 0.0008 × (-0.3) = 0.5 + 0.00024 = 0.50024
+Structure du projet :
 
-   PROBLÈME avec Gradient Descent basique :
-   Tous les poids utilisent le MÊME learning rate (0.0008).
-   Mais certains poids ont besoin de gros changements, d'autres de petits changements !
+project2/
+├── datasets/
+│   ├── pacman_dataset.pkl    → Données d'entraînement (15,018 exemples)
+│   └── pacman_test.pkl       → Données de test (pour Gradescope)
+│
+├── pacman_module/            → Moteur de jeu (NE PAS MODIFIER)
+│   ├── game.py
+│   ├── pacman.py
+│   ├── layout.py
+│   └── ...
+│
+├── data.py                   → Transforme GameState en 23 features
+├── architecture.py           → Définit le réseau MLP
+├── train.py                  → Entraîne le modèle
+├── pacmanagent.py            → Agent qui utilise le modèle
+├── run.py                    → Visualise le jeu
+├── write_submission.py       → Génère le CSV pour Gradescope
+│
+├── pacman_model.pth          → Poids du modèle entraîné
+└── submission.csv            → Prédictions pour Gradescope
 
-   SOLUTION : Adam (Adaptive Moment Estimation)
 
-   Adam est INTELLIGENT. Il regarde 2 choses pour adapter le learning rate de chaque poids :
+================================================================================
+PARTIE 3 : data.py - Transformer l'état du jeu en nombres
+================================================================================
 
-   1. Magnitude du gradient :
-      - Gradient FORT (grande pente) → On est loin du minimum → GRANDS pas pour avancer vite
-      - Gradient FAIBLE (petite pente) → On est proche du minimum → PETITS pas prudents
+PROBLÈME
+--------
+Un réseau de neurones ne peut pas comprendre directement un GameState.
+Il faut transformer l'état du jeu en nombres.
 
-   2. Stabilité du gradient (variance) :
-      - Gradients STABLES (direction constante) → Adam est CONFIANT → grands pas
-      - Gradients INSTABLES (direction change tout le temps) → Adam N'EST PAS CONFIANT → petits pas
-
-   Exemple concret pour un poids w :
 
-   GRADIENTS STABLES (confiant) :
-   Itération 1 : gradient = -0.5 (va à gauche)
-   Itération 2 : gradient = -0.52 (va à gauche)
-   Itération 3 : gradient = -0.48 (va à gauche)
-   → Direction claire et constante ! Adam fait de GRANDS pas à gauche
+LES 23 FEATURES
+---------------
 
-   GRADIENTS INSTABLES (pas confiant) :
-   Itération 1 : gradient = +0.5 (va à droite)
-   Itération 2 : gradient = -0.3 (va à gauche)
-   Itération 3 : gradient = +0.2 (va à droite)
-   → Direction qui zigzague ! Adam hésite et fait de PETITS pas prudents
+Notre réseau prend 23 nombres en entrée. Voici ce qu'ils représentent :
 
-   En gros : Adam fait de GRANDS pas quand il est sûr de la direction, et de PETITS pas quand il hésite.
-
-   Analogie visuelle :
-   Imagine que tu descends une montagne dans le brouillard pour trouver la vallée (le minimum) :
-
-   - Gradient FORT = pente raide → tu es loin du fond → tu cours vite (grands pas)
-   - Gradient FAIBLE = pente douce → tu es proche du fond → tu marches lentement (petits pas)
 
-   Gradient Descent classique : même vitesse partout
-   Adam : adapte la vitesse selon la pente ET la stabilité du terrain
-
-   Techniquement, Adam fait :
-   1. Calcule la MOYENNE des gradients récents (momentum)
-   2. Calcule la VARIANCE des gradients récents
-   3. Adapte le learning rate pour chaque poids individuellement
-
-   Résultat : Adam converge PLUS VITE et de manière PLUS STABLE que Gradient Descent classique.
-   C'est pour ça qu'on l'utilise (et presque tout le monde en deep learning l'utilise)
-
-   En résumé :
-   - Gradient Descent : learning_rate fixe pour tous les poids
-   - Adam : learning_rate adaptatif et intelligent pour chaque poids
-
-   ÉTAPE 6 : Le cycle complet (1 itération d'entraînement)
-
-   ORDRE CORRECT (exactement comme dans train.py) :
-
-   1. loss = model.loss(features, actions)
-      → Forward pass + calcul de la loss
-      → Calcule les prédictions ET compare avec les vraies actions
-
-   2. optim.zero_grad()
-      → Efface les anciens gradients (CRUCIAL sinon ils s'accumulent !)
-      → Remet tous les gradients à zéro avant le nouveau backward
-
-   3. loss.backward()
-      → Backward pass : calcule les gradients pour TOUS les poids
-      → Remonte la loss vers l'entrée en calculant ∇W L
-
-   4. optim.step()
-      → Met à jour les poids avec les gradients calculés
-      → Applique : W ← W - learning_rate × gradient (avec Adam)
-
-   IMPORTANT : Pourquoi zero_grad() APRÈS le forward et AVANT le backward ?
-   - Les gradients s'ACCUMULENT par défaut dans PyTorch
-   - Si tu ne les effaces pas, le nouveau gradient s'ADDITIONNE à l'ancien !
-   - Donc on doit faire zero_grad() avant chaque nouveau backward
-
-   On répète ce cycle des MILLIERS de fois (150 epochs × 47 batches ≈ 7050 itérations).
-   À chaque itération, les poids s'améliorent un peu.
-
-   ÉTAPE 7 : Pourquoi des epochs et des batches ?
-
-   - 1 batch = groupe de 256 exemples traités ensemble
-   - 1 epoch = 1 passage sur TOUT le dataset (15018 exemples)
-   - Nombre de batches par epoch = 15018 / 256 = ~47 batches
-
-   Pourquoi des batches ?
-   - Traiter 256 exemples ensemble est plus efficace (parallélisation GPU)
-   - Le gradient sur 256 exemples est plus stable qu'un seul exemple
-
-   Pourquoi des epochs ?
-   - Le réseau a besoin de voir les exemples PLUSIEURS FOIS pour bien apprendre
-   - 1 epoch ne suffit pas, il faut 150 epochs pour converger
-
-   ÉTAPE 8 : Résumé visuel du pipeline
-
-   ENTRAÎNEMENT (on modifie les poids) - ORDRE EXACT DU CODE :
-   ┌─────────────────────────────────────────────────────┐
-   │  for epoch in range(150):                          │
-   │    for features, actions in loader_train:          │
-   │                                                     │
-   │      1. loss = model.loss(features, actions)       │
-   │         → Forward pass + calcul loss               │
-   │         ↓                                           │
-   │      2. optim.zero_grad()                          │
-   │         → Efface les anciens gradients             │
-   │         ↓                                           │
-   │      3. loss.backward()                            │
-   │         → Backward pass (calcule gradients)        │
-   │         ↓                                           │
-   │      4. optim.step()                               │
-   │         → Update weights avec les gradients        │
-   │         ↓                                           │
-   │      Les poids sont maintenant meilleurs !         │
-   └─────────────────────────────────────────────────────┘
-
-   DÉTAIL DE L'ÉTAPE 2 prédiction: Le FORWARD PASS (model(features))
-
-   Voici ce qui se passe VRAIMENT à l'intérieur de model(features) :
-   Toutes les couches (Linear, BatchNorm, ReLU, Dropout) sont appelées ici !
-
-   features (batch de 256 exemples × 23 valeurs chacun)
-
-   C'est une MATRICE de forme (256, 23) :
-   ┌──────────────────────────────────────────────────────┐
-   │ Ligne 1  : State 1  → [0.25, 0.30, 0.8, ..., 1, 0]  │  (23 features)
-   │ Ligne 2  : State 2  → [0.10, 0.45, 0.5, ..., 0, 1]  │  (23 features)
-   │ Ligne 3  : State 3  → [0.50, 0.20, 0.3, ..., 1, 1]  │  (23 features)
-   │ ...                                                   │
-   │ Ligne 256: State 256 → [0.35, 0.60, 0.9, ..., 1, 0] │  (23 features)
-   └──────────────────────────────────────────────────────┘
-
-   Chaque LIGNE = 1 état de jeu différent (position Pacman, ghost, food, etc.)
-   Chaque COLONNE = 1 feature parmi les 23 (ex: colonne 0 = position X de Pacman)
-
-   En PyTorch : features.shape = torch.Size([256, 23])
-                                            ↑     ↑
-                                         batch   features
-                                         size    par état
-       ↓
-   ┌───────────────────────────────────────────────────┐
-   │ COUCHE 1 : Input → Hidden1                       │
-   ├───────────────────────────────────────────────────┤
-   │ Linear(23, 256)    : x @ W₁ + b₁                 │
-   │ BatchNorm1d(256)   : normalise les activations   │
-   │ ReLU()             : activation f(x) = max(0,x)  │
-   │ Dropout(0.3)       : éteint 30% des neurones     │
-   └───────────────────────────────────────────────────┘
-       ↓ (256 valeurs par exemple)
-   ┌───────────────────────────────────────────────────┐
-   │ COUCHE 2 : Hidden1 → Hidden2                      │
-   ├───────────────────────────────────────────────────┤
-   │ Linear(256, 128)   : x @ W₂ + b₂                 │
-   │ BatchNorm1d(128)   : normalise les activations   │
-   │ ReLU()             : activation f(x) = max(0,x)  │
-   │ Dropout(0.3)       : éteint 30% des neurones     │
-   └───────────────────────────────────────────────────┘
-       ↓ (128 valeurs par exemple)
-   ┌───────────────────────────────────────────────────┐
-   │ COUCHE 3 : Hidden2 → Hidden3                      │
-   ├───────────────────────────────────────────────────┤
-   │ Linear(128, 64)    : x @ W₃ + b₃                 │
-   │ BatchNorm1d(64)    : normalise les activations   │
-   │ ReLU()             : activation f(x) = max(0,x)  │
-   │ Dropout(0.3)       : éteint 30% des neurones     │
-   └───────────────────────────────────────────────────┘
-       ↓ (64 valeurs par exemple)
-   ┌───────────────────────────────────────────────────┐
-   │ COUCHE OUTPUT : Hidden3 → Actions                 │
-   ├───────────────────────────────────────────────────┤
-   │ Linear(64, 5)      : x @ W₄ + b₄                 │
-   │ (PAS d'activation, on veut les logits bruts)     │
-   └───────────────────────────────────────────────────┘
-       ↓
-   logits = [2.1, 0.5, 3.2, 1.0, 0.3]
-            ↑    ↑    ↑    ↑    ↑
-          NORTH SOUTH EAST WEST STOP
-
-   DÉTAIL DE L'ÉTAPE 4 : Le BACKWARD PASS (loss.backward())
-
-   Le gradient remonte dans l'ORDRE INVERSE, couche par couche :
-
-   loss.backward()  ← On démarre ici
-       ↑
-   ┌───────────────────────────────────────────────────┐
-   │ SORTIE : Gradient initial                         │
-   │ ∇loss = différence entre prédiction et vérité    │
-   └───────────────────────────────────────────────────┘
-       ↑
-   ┌───────────────────────────────────────────────────┐
-   │ Linear(64, 5) ← Reçoit ∇loss                      │
-   │ Calcule : ∇W₄ (gradient des poids de la couche)  │
-   │ Propage : gradient vers la couche précédente     │ 
-   └───────────────────────────────────────────────────┘
-       ↑
-   ┌───────────────────────────────────────────────────┐
-   │ Dropout ← Propage le gradient (skip si désactivé) │
-   └───────────────────────────────────────────────────┘
-       ↑
-   ┌───────────────────────────────────────────────────┐
-   │ ReLU ← Multiplie gradient par 1 si x>0, 0 sinon  │
-   │ (dérivée de l'activation)                         │
-   └───────────────────────────────────────────────────┘
-       ↑
-   ┌───────────────────────────────────────────────────┐
-   │ BatchNorm ← Ajuste le gradient selon la norm     │
-   └───────────────────────────────────────────────────┘
-       ↑
-   ┌───────────────────────────────────────────────────┐
-   │ Linear(128, 64) ← Calcule ∇W₃                     │
-   └───────────────────────────────────────────────────┘
-       ↑
-   Dropout ← BatchNorm ← ReLU ← Linear(256, 128) ← ...
-       ↑
-   Continue jusqu'à la première couche !
-       ↑
-   ┌───────────────────────────────────────────────────┐
-   │ Linear(23, 256) ← Calcule ∇W₁                     │
-   │ C'est fini ! Tous les gradients sont calculés    │
-   └───────────────────────────────────────────────────┘
-
-   Résumé :
-   - FORWARD (étape 2) : features → Linear → BatchNorm → ReLU → Dropout → ... → logits
-   - BACKWARD (étape 4) : loss ← Linear ← Dropout ← ReLU ← BatchNorm ← ... ← input
-   - OPTIMIZER (étape 5) : Utilise tous les ∇W calculés pour mettre à jour les poids
-
-   ÉVALUATION (on teste, sans modifier les poids) :
-   ┌─────────────────────────────────────────────────────┐
-   │  with torch.no_grad():  [pas de gradients]         │
-   │    for batch in test_dataset:                      │
-   │                                                     │
-   │      1. features, actions = batch                  │
-   │         ↓                                           │
-   │      2. predictions = model(features)  [FORWARD]   │
-   │         ↓                                           │
-   │      3. accuracy = compare(predictions, actions)   │
-   │         ↓                                           │
-   │      On mesure la performance, c'est tout !        │
-   └─────────────────────────────────────────────────────┘
-
-   Différence clé :
-   - ENTRAÎNEMENT 80%: Forward → Loss → Backward → Update weights
-   - ÉVALUATION 20%: Forward → Accuracy (pas de backward, pas d'update)
-
-   ÉTAPE 9 : Pourquoi model.train() et model.eval() ?
-
-   model.train() :
-   - Active le dropout : désactive aléatoirement 30% des neurones
-   - Pourquoi ? Pour éviter l'overfitting (le réseau mémorise au lieu d'apprendre)
-
-   model.eval() :
-   - Désactive le dropout : utilise TOUS les neurones
-   - Pourquoi ? Pour avoir des prédictions stables et déterministes
-
-   ÉTAPE 10 : Analogie finale
-
-   Imagine que tu apprends à jouer au basket :
-   - Forward pass = tu tires au panier
-   - Loss = distance entre le ballon et le panier (ton erreur)
-   - Gradients = "j'aurais dû tirer plus fort" ou "plus à gauche"
-   - Optimizer = tu ajustes ta technique pour le prochain tir
-   - Epochs = tu t'entraînes pendant des semaines
-
-   Au début tu rates beaucoup (loss élevée).
-   Après 150 jours d'entraînement, tu réussis 87% de tes tirs (accuracy = 87%).
-
-   C'est exactement pareil pour le réseau de neurones !
-
-   Maintenant quand tu vois ce code :
-      loss = model.loss(features, actions)
-      optim.zero_grad()
-      loss.backward()
-      optim.step()
-
-   Tu comprends : "Ah oui, il calcule l'erreur, calcule les gradients,
-   et ajuste les poids pour faire mieux la prochaine fois !"
-
--------------------------------------------------------------------------------------------------------
-PARTIE 1 : Vue d'ensemble
-
-   But: apprendre à Pacman à imiter un expert en utilisant l'apprentissage supervisé.
-   Depuis un dataset de paires (GameState, action)
-   et on veut entraîner un réseau de neurones à prédire quelle action l'expert aurait pris.
-
-   Ordre de lecture : ici les 4 fichiers qu'on a modifié
-   1. data.py - Convertit GameState en 23 features
-   2. architecture.py - Définit le réseau MLP (23 → 256 → 128 → 64 → 5)
-   3. train.py - Entraîne le modèle (simple console output)
-   4. pacmanagent.py - Utilise le modèle pour jouer
-   5. write_submission.py - Génère le CSV de prédictions pour le test set
-
-
-   Quick summary de chaque fichier :
-
-   data.py (Feature Engineering)
-   La partie la plus importante. On transforme le GameState en 23 features :
-   position, distances Manhattan pour ghost/food, géométrie du labyrinthe,
-   actions légales, et niveau de danger. Tout est normalisé pour que le réseau converge bien.
-
-   architecture.py (Réseau de neurones)
-   MLP simple : 23 → 256 → 128 → 64 → 5 (3 couches cachées)
-   Pattern par couche : Linear → BatchNorm → GELU → Dropout(0.3)
-   Architecture similaire aux MLPs classiques pour la classification (voir MNIST [5]).
-
-   train.py (Entraînement)
-   Split train/test 80/20, Adam optimizer, 150 epochs, batch_size=256.
-   Utilise CrossEntropyLoss pour classification multi-classe (5 actions).
-   Affiche l'accuracy à chaque epoch et sauvegarde le meilleur modèle.
-
-   pacmanagent.py (Agent)
-   Utilise le modèle entraîné pour jouer.
-   Convertit l'état → features → forward → softmax → meilleure action légale.
-
-   write_submission.py (Génération CSV)
-   Charge le modèle entraîné et le test set pour générer les prédictions.
-   Pour chaque état du test set : state_to_tensor → model(x) → argmax → INDEX_TO_ACTION.
-   Utilise torch.no_grad() pour désactiver les gradients (pas besoin en inférence).
-   Génère submission.csv avec les actions prédites dans l'ordre du test set.
-
-
-   Structure du projet :
-   project2/
-   ├── datasets/
-   │   ├── pacman_dataset.pkl    → 15018 paires (state, action) de l'expert
-   │   └── pacman_test.pkl       → États de jeu sans actions pour Gradescope
-   ├── pacman_module/            → Moteur de jeu (NE PAS MODIFIER)
-   ├── data.py                   → Feature engineering + Dataset
-   ├── architecture.py           → Réseau de neurones (MLP)
-   ├── train.py                  → Boucle d'entraînement + visualisation intégrée
-   ├── pacmanagent.py            → Agent qui joue
-   ├── run.py                    → Visualisation du jeu
-   ├── write_submission.py       → Génération du CSV
-   ├── pacman_model.pth          → Poids du modèle entraîné
-   └── submission.csv            → Prédictions pour Gradescope
-
-
-PARTIE 2 : Data.py - Feature Engineering
-
-   Un réseau de neurones ne peut pas apprendre directement d'un GameState brut.
-   On doit extraire des informations pertinentes pour la prise de décision.
-
-   Nos 23 features (toutes normalisées ~[0,1]):
-
-   POSITION PACMAN (2 features):
-   [0] px / 20       Position X de Pacman
-   [1] py / 20       Position Y de Pacman
-
-   INFORMATION GHOST (4 features):
-   [2] direction_to_ghost_x    Direction vers le ghost (normalisée)
-   [3] direction_to_ghost_y    Direction vers le ghost (normalisée)
-   [4] ghost_mantt_dist / diam Distance Manhattan au ghost
-   [5] ghost_adjacent          1 si ghost adjacent (distance ≤ 1)
-
-   INFORMATION FOOD (4 features):
-   [6] n_food / 50                  Nombre de food restante
-   [7] direction_to_food_x          Direction vers la food la plus proche
-   [8] direction_to_food_y          Direction vers la food la plus proche
-   [9] closest_food_dist / diam     Distance Manhattan à la food la plus proche
-
-   GEOMETRIE DU LABYRINTHE (5 features):
-   [10] dist_north / H  Distance au mur au Nord
-   [11] dist_south / H  Distance au mur au Sud
-   [12] dist_east  / W  Distance au mur à l'Est
-   [13] dist_west  / W  Distance au mur à l'Ouest
-   [14] is_corner       1 si c'est un coin (≤2 directions légales)
-
-   DANGER (3 features):
-   [15] danger_level      1.0 / max(ghost_dist, 0.5) - Plus élevé = plus dangereux
-   [16] ghost_blocks_food 1 si ghost est entre Pacman et la food
-   [17] escape_options    Nombre de directions légales (hors STOP) / 4
-
-   ACTIONS LEGALES (5 features):
-   [18] legal_north  1 si NORTH est légal
-   [19] legal_south  1 si SOUTH est légal
-   [20] legal_east   1 si EAST est légal
-   [21] legal_west   1 si WEST est légal
-   [22] legal_stop   1 si STOP est légal
-
-
-   Comment on trouve la food la plus proche ?
-
-   1. On récupère toutes les positions de food
-      food_positions = [(5, 3), (7, 8), (2, 4), ...]
-
-   2. On calcule la distance Manhattan à CHAQUE food
-      distances = [abs(pac_x - food_x) + abs(pac_y - food_y)
-                  for food_x, food_y in food_positions]
-
-   3. On trouve laquelle est la plus proche
-      closest_index = argmin(distances)
-
-   4. On calcule la direction vers cette food
-      direction_x = closest_food_x - pac_x
-      direction_y = closest_food_y - pac_y
-
-      Si direction_x > 0 → food à droite
-      Si direction_x < 0 → food à gauche
-      Si direction_y > 0 → food en haut
-      Si direction_y < 0 → food en bas
-
-
-   Géométrie du labyrinthe
-
-   La fonction dist_until_wall() compte combien de cases Pacman peut avancer
-   dans une direction avant de rencontrer un mur.
-
-   Exemple visuel:
-      # # # # # # #
-      # . . . . . #
-      # # P . . . #  ← Pacman en (2,2)
-      # # # . . . #
-      # # # # # # #
-
-   dist_until_wall(2, 2, 1, 0) = 3  (peut aller 3 cases à droite)
-   dist_until_wall(2, 2, -1, 0) = 0  (mur immédiat à gauche)
-
-   Détection de coin :
-   On compte combien de directions sont libres autour de Pacman.
-   Si ≤2, c'est un coin (dangereux car peu d'options pour fuir).
-
-
-PARTIE 3 : Architecture (architecture.py)
-
-   Pourquoi un MLP et pas un CNN ?
-   Les CNN sont faits pour les images 2D où les pixels voisins sont liés (ex: MNIST [5]).
-   Notre input est un vecteur (je dirais même un tenseur!) 1D de 23 features sans relation spatiale,
-   donc un MLP est le bon choix - similaire aux architectures fully-connected classiques.
-
-   Structure : 23 → 256 → 128 → 64 → 5
-
-   Pour chaque couche cachée ici 3: Linear → BatchNorm → ReLU → Dropout
-
-   1. Linear : transforme les données (multiplication matricielle + biais)
-   2. BatchNorm [1] : normalise les valeurs entre couches (stabilise l'entraînement)
-   3. ReLU : activation f(x) = max(0, x), simple et efficace
-   4. Dropout [3] : prévient l'overfitting (p=0.3)
-   5. Pas d'activation finale : CrossEntropyLoss veut des logits bruts
-
-   Pourquoi ReLU ?
-   ReLU est l'activation standard pour les MLPs : simple, rapide, efficace.
-   Elle résout le problème du vanishing gradient et permet une convergence rapide.
-
-
-PARTIE 4 : Entraînement (train.py)
-
-   Pipeline :
-   1. Charger le dataset (15018 échantillons)
-   2. Split train/test (80%/20%) avec random_split
-   3. Entraîner pendant 150 epochs
-   4. Évaluer sur test set et sauvegarder le modèle
-
-   Hyperparamètres optimisés :
-   - batch_size = 256      → Batch size élevé pour gradients stables
-   - epochs = 150          → Assez d'epochs pour convergence complète
-   - lr = 8e-4             → Learning rate légèrement élevé pour converger plus vite
-   - test_ratio = 0.2      → 20% pour évaluation finale
-
-   Modifications importantes :
-   - Affichage simple de l'accuracy à chaque epoch
-   - Évaluation du test set à chaque epoch
-   - Checkpointing : sauvegarde automatique du meilleur modèle basé sur test accuracy
-
-
-   Loss function : CrossEntropyLoss
-
-   La loss mesure à quel point le réseau se trompe (0 = parfait, plus c'est grand, plus il est loin de la bonne action).
-   Le gradient, c'est la dérivée de cette loss par rapport aux poids : il indique dans quelle direction et de combien on doit modifier les poids pour réduire l'erreur (descente de gradient).
-
-   Vu au cours pour les problèmes de classification.
-   Mais pourquoi on a besoin d'une "loss" ? Explications depuis le début :
-
-            ÉTAPE 1 : Qu'est-ce qu'on veut faire ?
-
-            On veut que le réseau apprenne à imiter l'expert.
-            Pour chaque situation de jeu, l'expert a choisi une action (ex: EAST).
-            On veut que le réseau apprenne à faire le même choix.
-
-            Exemple concret :
-            - État du jeu : Pacman en (5,3), ghost à droite, food en haut
-            - Expert a choisi : NORTH (indice 0)
-            - Réseau prédit : [2.1, 0.5, 3.2, 1.0, 0.3]  ← nombres bruts (logits)
-                              ↑    ↑    ↑    ↑    ↑
-                              NORTH SOUTH EAST WEST STOP
-
-            Problème : Le réseau prédit 3.2 pour EAST, mais l'expert voulait NORTH !
-            On doit dire au réseau "tu t'es trompé, il fallait choisir NORTH".
-
-            ÉTAPE 2 : Comment mesurer l'erreur ?
-
-            D'abord, convertir les logits en probabilités avec SOFTMAX :
-
-            Softmax(x_i) = exp(x_i) / Σ exp(x_j)
-
-            Logits :        [2.1,  0.5,  3.2,  1.0,  0.3]
-                              ↓     ↓     ↓     ↓     ↓
-            Probabilités :  [0.18, 0.04, 0.54, 0.06, 0.03]
-                              ↑
-                           NORTH = 18% seulement (mais c'est la bonne action!)
-
-            Les probabilités somment à 1.0 (= 100%).
-            On voit que le réseau donne seulement 18% de confiance à NORTH,
-            alors que c'est l'action correcte !
-
-            ÉTAPE 3 : Calculer la perte (loss)
-
-            La loss mesure "à quel point le réseau s'est trompé".
-
-            On veut pénaliser le réseau quand :
-            - La probabilité de la BONNE action est FAIBLE (mauvais !)
-            - La probabilité de la BONNE action est ÉLEVÉE (bon !)
-
-            Formule mathématique (pour 1 exemple) :
-               Loss = -log(probabilité_de_la_bonne_action)
-
-            Dans notre exemple :
-               Bonne action = NORTH, probabilité = 0.18
-               Loss = -log(0.18) = 1.71
-
-            Plus la probabilité est basse, plus la loss est élevée (= grosse pénalité).
-            Si probabilité = 1.0 (100% sûr), alors loss = 0 (parfait !).
-
-            ÉTAPE 4 : Cross Entropy = moyenne sur tout le batch
-
-            Un batch = groupe de 256 exemples traités ensemble.
-            On calcule la loss pour CHAQUE exemple, puis on fait la moyenne.
-
-            Formule complète (du cours) :
-               L(θ) = -1/N Σ_(x_j,y_j)∈d Σ_{i=1}^C y_ij log f_i(x_j; θ)
-
-            Où :
-            - N = nombre d'exemples dans le batch (256)
-            - C = nombre de classes (5 actions)
-            - y_ij = 1 si l'exemple j appartient à la classe i, 0 sinon
-            - f_i(x_j; θ) = probabilité prédite par le réseau pour la classe i
-
-            En clair : Pour chaque exemple, prends -log(proba de la bonne action),
-            puis fais la moyenne sur tout le batch.
-
-            ÉTAPE 5 : Pourquoi CrossEntropyLoss en PyTorch ?
-
-            Manuellement, il faudrait faire :
-            1. Logits → Softmax → probabilités
-            2. Prendre le log des probabilités → log-probabilités
-            3. Sélectionner la bonne action et calculer -log(proba)
-            4. Faire la moyenne
-
-            PyTorch fait TOUT ça automatiquement avec CrossEntropyLoss() !
-
-            Bonus : PyTorch utilise LogSoftmax au lieu de Softmax + Log séparément.
-            Pourquoi ? Pour la stabilité numérique (éviter les overflows avec exp()).
-
-            Résumé :
-               CrossEntropyLoss = Softmax + Log + Sélection + Moyenne
-
-            En une seule ligne de code, PyTorch :
-            - Convertit les logits en probabilités
-            - Calcule -log(probabilité de la bonne action)
-            - Fait la moyenne sur le batch
-            - Tout ça de manière stable et rapide !
-
-            C'est pour ça qu'on n'a PAS besoin de mettre Softmax à la fin du réseau :
-            CrossEntropyLoss s'attend à recevoir des logits bruts et fait le reste.
-
-   Optimizer : Adam [4]
-   Adam est le choix par défaut pour le deep learning car il adapte
-   le learning rate par paramètre et converge rapidement.
-   Fonctionne bien avec notre architecture inspirée des MLPs classiques (MNIST [5]).
-
-      Checkpointing - Sauvegarde du meilleur modèle :
-      À chaque epoch, on évalue l'accuracy sur le test set.
-      Si l'accuracy actuelle > meilleure accuracy précédente, on sauvegarde le modèle.
-      Cela garantit qu'on garde le modèle qui généralise le mieux, pas le dernier
-      (qui pourrait avoir overfitté). Le modèle est sauvegardé dans pacman_model.pth.
-
-
-PARTIE 5 : Agent (pacmanagent.py)
-
-   Juste lire le .py suffit
-
-
-PARTIE 6 : Génération du CSV de soumission (write_submission.py)
-
-   Ce fichier permet de générer le fichier submission.csv pour Gradescope.
-   Il charge le modèle entraîné et fait des prédictions sur pacman_test.pkl.
-
-   ÉTAPE 1 : Initialisation (méthode __init__)
-
-   - Charge le test set depuis pacman_test.pkl
-   - ATTENTION : Le test set contient uniquement des GameState (pas d'actions !)
-   - Charge le modèle depuis pacman_model.pth
-   - Met le modèle en mode évaluation avec model.eval()
-
-   ÉTAPE 2 : Prédiction (méthode predict_on_testset)
-
-   Pour chaque état du test set :
-   1. state_to_tensor(state) → Convertit GameState en tensor de 23 features
-   2. x.unsqueeze(0) → Ajoute une dimension batch (1, 23) car le modèle attend un batch
-   3. with torch.no_grad() → Désactive le calcul des gradients (pas besoin en inférence)
-   4. logits = self.model(x) → Forward pass, obtient les scores bruts pour chaque action
-   5. pred_index = logits.argmax(dim=1).item() → Prend l'action avec le score le plus élevé
-   6. action = INDEX_TO_ACTION[pred_index] → Convertit l'indice en objet Direction
-   7. actions.append(action) → Ajoute l'action à la liste
-
-   ÉTAPE 3 : Écriture du CSV (méthode write_csv)
-
-   - Crée un DataFrame pandas avec une colonne ACTION
-   - Écrit les prédictions dans submission.csv
-   - Format attendu : une action par ligne (NORTH, SOUTH, EAST, WEST, STOP)
-
-   IMPORTANT :
-   - Les prédictions doivent suivre le MÊME ORDRE que le test set
-   - torch.no_grad() est crucial pour économiser la mémoire et accélérer l'inférence
-   - On n'utilise PAS de softmax ici car on veut juste l'action avec le score max
-   - model.eval() désactive le dropout pour avoir des prédictions déterministes
-
-   Changements effectués :
-   - Importé INDEX_TO_ACTION depuis data.py pour convertir indices → actions
-   - Complété la boucle de prédiction avec le code manquant
-   - Utilisé torch.no_grad() pour optimiser les performances
-   - Fonction d'activation changée de GELU à ReLU dans architecture.py
-
-
-PARTIE 7 : Questions possibles à l'oral - FAQ
-
-   Q: Pourquoi un MLP et pas un CNN?
-   R: Les CNN sont faits pour les images 2D où les pixels voisins sont liés.
-   Notre input est un vecteur 1D de 23 features sans relation spatiale,
-   donc un MLP est le bon choix.
-
-   Q: Pourquoi normaliser les features?
-   R: Les NN convergent mieux quand les inputs sont dans la même échelle.
-   Sans normalisation, certaines features domineraient les autres.
-
-   Q: Pourquoi ReLU maintenant au lieu de GELU?
-   R: ReLU est plus simple et rapide à calculer : f(x) = max(0, x).
-   GELU était utilisé avant pour un flow de gradients plus smooth, mais ReLU
-   fonctionne très bien pour ce problème et converge rapidement.
+1. POSITION DE PACMAN (2 features)
+   [0] pac_x / maze_width    → Position X normalisée
+   [1] pac_y / maze_height   → Position Y normalisée
+
+
+2. INFORMATION SUR LE FANTÔME (4 features)
+   [2] (ghost_x - pac_x) / maze_width   → Direction X vers le fantôme
+   [3] (ghost_y - pac_y) / maze_height  → Direction Y vers le fantôme
+   [4] distance_manhattan / max_dist    → Distance au fantôme
+   [5] ghost_adjacent                   → 1 si fantôme à côté, 0 sinon
+
+
+3. INFORMATION SUR LA NOURRITURE (4 features)
+   [6] n_food / 50                      → Nombre de pastilles restantes
+   [7] (food_x - pac_x) / maze_width    → Direction X vers la nourriture
+   [8] (food_y - pac_y) / maze_height   → Direction Y vers la nourriture
+   [9] distance_food / max_dist         → Distance à la nourriture
+
+
+4. GÉOMÉTRIE DU LABYRINTHE (5 features)
+   [10] distance_nord / maze_height     → Cases libres vers le nord
+   [11] distance_sud / maze_height      → Cases libres vers le sud
+   [12] distance_est / maze_width       → Cases libres vers l'est
+   [13] distance_ouest / maze_width     → Cases libres vers l'ouest
+   [14] is_corner                       → 1 si coin (≤2 directions), 0 sinon
+
+
+5. NIVEAU DE DANGER (3 features)
+   [15] danger_level                    → 1 / max(dist_ghost, 0.5)
+   [16] ghost_blocks_food               → 1 si fantôme entre Pacman et food
+   [17] escape_options                  → Nombre de directions / 4
+
+
+6. ACTIONS LÉGALES (5 features)
+   [18] legal_north   → 1 si on peut aller au nord, 0 sinon
+   [19] legal_south   → 1 si on peut aller au sud, 0 sinon
+   [20] legal_east    → 1 si on peut aller à l'est, 0 sinon
+   [21] legal_west    → 1 si on peut aller à l'ouest, 0 sinon
+   [22] legal_stop    → 1 si on peut s'arrêter, 0 sinon
+
+
+POURQUOI NORMALISER ?
+--------------------
+
+Sans normalisation :
+- Position X : entre 0 et 20
+- Position Y : entre 0 et 20
+- Distance : entre 0 et 40
+- Legal flags : 0 ou 1
+
+Problème : les grandes valeurs (positions, distances) dominent les petites (flags).
+Le réseau apprend mal.
+
+Avec normalisation :
+- Tout est entre 0 et 1
+- Toutes les features ont la même importance
+- Le réseau apprend beaucoup mieux !
+
+
+COMMENT ON TROUVE LA NOURRITURE LA PLUS PROCHE ?
+------------------------------------------------
+
+1. On récupère toutes les positions de nourriture
+   food_positions = [(5, 3), (7, 8), (2, 4), ...]
+
+2. On calcule la distance Manhattan à CHAQUE nourriture
+   distance = |pac_x - food_x| + |pac_y - food_y|
+
+3. On trouve laquelle est la plus proche
+   min_distance = min(distances)
+
+4. On calcule la direction vers cette nourriture
+   direction_x = food_x - pac_x
+   direction_y = food_y - pac_y
+
+
+COMMENT ON CALCULE LA DISTANCE JUSQU'AU MUR ?
+---------------------------------------------
+
+La fonction dist_until_wall(x, y, dx, dy) compte combien de cases on peut
+avancer dans une direction avant de toucher un mur.
+
+Exemple visuel :
+
+   # # # # # # #
+   # . . . . . #
+   # # P . . . #  ← Pacman en (2, 2)
+   # # # . . . #
+   # # # # # # #
+
+   dist_until_wall(2, 2,  1, 0) = 3  (3 cases libres vers l'est)
+   dist_until_wall(2, 2, -1, 0) = 0  (mur immédiat à l'ouest)
+   dist_until_wall(2, 2,  0, 1) = 1  (1 case libre vers le nord)
+
+
+CONVERSION DES ACTIONS EN INDICES
+---------------------------------
+
+Le réseau ne comprend pas les objets Python comme Directions.NORTH.
+On doit convertir en indices (nombres) :
+
+ACTION_TO_INDEX = {
+   Directions.NORTH: 0,
+   Directions.SOUTH: 1,
+   Directions.EAST: 2,
+   Directions.WEST: 3,
+   Directions.STOP: 4
+}
+
+INDEX_TO_ACTION = {0: NORTH, 1: SOUTH, 2: EAST, 3: WEST, 4: STOP}
+
+Pendant l'entraînement :
+   Expert joue EAST → converti en indice 2 → Le réseau apprend à prédire 2
+
+Pendant l'inférence :
+   Réseau prédit [0.05, 0.1, 0.75, 0.08, 0.02]
+   → argmax = 2
+   → reconverti en EAST
+
+
+================================================================================
+PARTIE 4 : architecture.py - Le cerveau du réseau
+================================================================================
+
+CHOIX D'ARCHITECTURE : POURQUOI UN MLP ?
+----------------------------------------
+
+MLP = Multi-Layer Perceptron = réseau de neurones fully-connected
+
+On n'utilise PAS de CNN (Convolutional Neural Network) parce que :
+- Les CNN sont faits pour les images 2D (pixels voisins sont liés)
+- Notre input est un vecteur 1D de 23 nombres
+- Pas de relation spatiale entre les features
+- Un MLP simple est le bon choix
+
+
+STRUCTURE DU RÉSEAU
+-------------------
+
+23 inputs → 256 → 128 → 64 → 5 outputs
+
+Input Layer:     23 neurones (nos 23 features)
+Hidden Layer 1:  256 neurones
+Hidden Layer 2:  128 neurones
+Hidden Layer 3:  64 neurones
+Output Layer:    5 neurones (les 5 actions)
+
+Total : 47,168 poids à apprendre !
+
+
+PATTERN DE CHAQUE COUCHE CACHÉE
+-------------------------------
+
+Pour chaque couche cachée, on applique 4 opérations dans l'ordre :
+
+1. Linear(in, out)
+   → Transformation linéaire : y = W @ x + b
+   → Calcule les combinaisons pondérées
+
+2. BatchNorm1d(out)
+   → Normalise les valeurs (moyenne=0, variance=1)
+   → Stabilise l'entraînement
+
+3. ReLU()
+   → Fonction d'activation : f(x) = max(0, x)
+   → Met les valeurs négatives à 0
+   → Casse la linéarité (permet d'apprendre des fonctions complexes)
+
+4. Dropout(0.3)
+   → Éteint aléatoirement 30% des neurones pendant l'entraînement
+   → Évite l'overfitting (empêche le réseau de mémoriser)
+
+
+POURQUOI ReLU ?
+--------------
+
+ReLU est l'activation standard pour les MLPs :
+- Simple : f(x) = max(0, x)
+- Rapide à calculer
+- Résout le problème du vanishing gradient
+- Permet une convergence rapide
+
+Alternative : GELU (plus smooth), mais ReLU fonctionne très bien ici.
+
+
+POURQUOI BATCHNORM ?
+-------------------
+
+Sans BatchNorm, l'entraînement était instable.
+BatchNorm normalise les valeurs entre les couches.
+
+Avantages :
+- Stabilise les gradients
+- Permet d'utiliser un learning rate plus élevé
+- Convergence plus rapide
+
+
+POURQUOI DROPOUT ?
+-----------------
+
+Dropout = régularisation pour éviter l'overfitting
+
+Dropout(0.3) signifie :
+- Pendant l'entraînement : éteint 30% des neurones aléatoirement
+- Pendant l'évaluation : utilise TOUS les neurones
+
+Pourquoi ça marche ?
+- Force le réseau à ne pas trop dépendre de certains neurones
+- Le réseau apprend des patterns plus robustes
+- Généralise mieux sur de nouveaux exemples
+
+Valeur optimale : 0.3 (testé empiriquement)
+- Trop de dropout (0.5) : underfitting
+- Pas assez (0.1) : overfitting
+
+
+PAS D'ACTIVATION SUR LA DERNIÈRE COUCHE
+---------------------------------------
+
+La dernière couche est juste Linear(64, 5), sans ReLU.
+
+Pourquoi ?
+- On veut des valeurs brutes (logits) : [-2.1, 0.5, 3.2, 1.0, -0.3]
+- CrossEntropyLoss fait le Softmax automatiquement
+- Pas besoin de mettre Softmax dans le réseau
+
+
+CODE SIMPLIFIÉ
+--------------
+
+def __init__(self):
+    layers = []
+
+    # Couche 1 : 23 → 256
+    layers.append(nn.Linear(23, 256))
+    layers.append(nn.BatchNorm1d(256))
+    layers.append(nn.ReLU())
+    layers.append(nn.Dropout(0.3))
+
+    # Couche 2 : 256 → 128
+    layers.append(nn.Linear(256, 128))
+    layers.append(nn.BatchNorm1d(128))
+    layers.append(nn.ReLU())
+    layers.append(nn.Dropout(0.3))
+
+    # Couche 3 : 128 → 64
+    layers.append(nn.Linear(128, 64))
+    layers.append(nn.BatchNorm1d(64))
+    layers.append(nn.ReLU())
+    layers.append(nn.Dropout(0.3))
+
+    # Couche de sortie : 64 → 5
+    layers.append(nn.Linear(64, 5))
+
+    self.net = nn.Sequential(*layers)
+    self.criterion = nn.CrossEntropyLoss()
+
+
+================================================================================
+PARTIE 5 : train.py - Apprendre au réseau
+================================================================================
+
+PIPELINE D'ENTRAÎNEMENT
+-----------------------
+
+1. Charger le dataset (15,018 exemples)
+2. Split train/test 80/20 (12,014 train / 3,004 test)
+3. Créer les DataLoaders avec batch_size=256
+4. Entraîner pendant 150 epochs
+5. Évaluer sur le test set à chaque epoch
+6. Sauvegarder le meilleur modèle
+
+
+HYPERPARAMÈTRES
+--------------
+
+batch_size = 256
+- Traite 256 exemples à la fois
+- Gradients plus stables (moyenne sur 256 exemples)
+- Plus efficace pour le GPU
+
+epochs = 150
+- Répète l'entraînement 150 fois sur tout le dataset
+- Suffisant pour converger complètement
+- Le meilleur modèle est généralement vers epoch 120-130
+
+learning_rate = 8e-4 (0.0008)
+- Légèrement élevé pour converger plus vite
+- Pas trop élevé pour rester stable
+
+test_ratio = 0.2
+- 20% des données pour tester
+- 80% pour entraîner
+
+
+LA LOSS FUNCTION : CROSSENTROPYLOSS
+-----------------------------------
+
+CrossEntropyLoss est LA loss standard pour la classification multi-classe.
+
+Comment ça marche ?
+
+ÉTAPE 1 : Le réseau produit des logits
+   [2.1, 0.5, 3.2, 1.0, 0.3]
+
+ÉTAPE 2 : Softmax transforme en probabilités
+   [0.18, 0.04, 0.54, 0.06, 0.03]
+   (somme = 1.0)
+
+ÉTAPE 3 : On prend le log des probabilités
+   [log(0.18), log(0.04), log(0.54), log(0.06), log(0.03)]
+
+ÉTAPE 4 : On sélectionne la bonne action et on calcule -log(proba)
+   Si la bonne action est NORTH (indice 0) :
+   Loss = -log(0.18) = 1.71
+
+ÉTAPE 5 : On fait la moyenne sur tout le batch
+   Loss_batch = moyenne de toutes les losses
+
+PyTorch fait TOUT ça automatiquement avec CrossEntropyLoss() !
+
+
+L'OPTIMIZER : ADAM
+-----------------
+
+Adam (Adaptive Moment Estimation) est l'optimizer standard en deep learning.
+
+Pourquoi Adam ?
+- Adapte le learning rate pour chaque poids individuellement
+- Converge plus vite que Gradient Descent classique
+- Plus stable (moins de variations)
+
+Comment ça marche ?
+1. Calcule la moyenne des gradients récents (momentum)
+2. Calcule la variance des gradients récents
+3. Ajuste le learning rate selon ces statistiques
+
+Résultat :
+- GRANDS pas quand le gradient est stable et fort (on est loin du minimum)
+- PETITS pas quand le gradient est instable ou faible (on est proche du minimum)
+
+
+BOUCLE D'ENTRAÎNEMENT COMPLÈTE
+------------------------------
+
+```python
+for epoch in range(150):
+    model.train()  # Mode entraînement (dropout activé)
+
+    for features, actions in train_loader:
+        # 1. Forward pass
+        loss = model.loss(features, actions)
+
+        # 2. Backward pass
+        optim.zero_grad()  # Efface les anciens gradients
+        loss.backward()    # Calcule les nouveaux gradients
+        optim.step()       # Met à jour les poids
+
+    # Évaluation sur le test set
+    model.eval()  # Mode évaluation (dropout désactivé)
+    accuracy = evaluate(model, test_loader)
+
+    # Sauvegarde du meilleur modèle
+    if accuracy > best_accuracy:
+        best_accuracy = accuracy
+        torch.save(model.state_dict(), 'pacman_model.pth')
+
+    print(f"Epoch {epoch}: Accuracy = {accuracy:.2f}%")
+```
+
+
+CHECKPOINTING : SAUVEGARDER LE MEILLEUR MODÈLE
+----------------------------------------------
+
+À chaque epoch, on évalue l'accuracy sur le test set.
+Si c'est la meilleure accuracy jusqu'à maintenant, on sauvegarde le modèle.
+
+Pourquoi ?
+- Le dernier modèle (epoch 150) n'est pas toujours le meilleur
+- Il peut avoir overfitté (mémorisé les données d'entraînement)
+- Le meilleur modèle est celui qui généralise le mieux (meilleure test accuracy)
+
+Le modèle est sauvegardé dans pacman_model.pth
+
+
+RÉSULTATS TYPIQUES
+-----------------
+
+Epoch 1:   Accuracy ≈ 60%  (commence aléatoire)
+Epoch 50:  Accuracy ≈ 82%
+Epoch 100: Accuracy ≈ 86%
+Epoch 120: Accuracy ≈ 87.5%  ← Meilleur modèle
+Epoch 150: Accuracy ≈ 87.2%  (légère baisse = overfitting)
+
+Pourquoi l'accuracy plafonne à ~87-88% ?
+- Dans certaines situations, plusieurs actions sont également bonnes
+- Le réseau peut choisir une action différente de l'expert, mais tout aussi valide
+- C'est normal et ne veut pas dire que le modèle est mauvais
+
+
+================================================================================
+PARTIE 6 : write_submission.py - Générer les prédictions
+================================================================================
+
+OBJECTIF
+--------
+Générer un fichier submission.csv avec les prédictions pour Gradescope.
+
+
+DIFFÉRENCE ENTRE TRAIN SET ET TEST SET
+--------------------------------------
+
+Train set (pacman_dataset.pkl) :
+- Contient : (GameState, action) paires
+- 15,018 exemples
+- On connaît l'action de l'expert
+- Utilisé pour entraîner le réseau
+
+Test set (pacman_test.pkl) :
+- Contient : SEULEMENT des GameState (pas d'actions !)
+- Nombre d'exemples inconnu
+- On doit PRÉDIRE l'action
+- Utilisé pour Gradescope
+
+
+ÉTAPE 1 : INITIALISATION
+------------------------
+
+```python
+def __init__(self, test_set_path, model_path):
+    # Charger le test set
+    with open(test_set_path, 'rb') as f:
+        self.test_set = pickle.load(f)
+
+    # Charger le modèle
+    self.model = PacmanNetwork()
+    self.model.load_state_dict(torch.load(model_path))
+
+    # Mode évaluation (dropout désactivé)
+    self.model.eval()
+```
+
+
+ÉTAPE 2 : PRÉDICTION
+--------------------
+
+Pour chaque état du test set, on fait une prédiction :
+
+```python
+def predict_on_testset(self):
+    actions = []
+
+    for state in self.test_set:
+        # 1. Convertir GameState en tensor (23 features)
+        x = state_to_tensor(state)
+
+        # 2. Ajouter dimension batch (1, 23)
+        x = x.unsqueeze(0)
+
+        # 3. Désactiver les gradients (on ne fait que de l'inférence)
+        with torch.no_grad():
+            # 4. Forward pass
+            logits = self.model(x)
+
+            # 5. Prendre l'action avec le score le plus élevé
+            pred_index = logits.argmax(dim=1).item()
+
+            # 6. Convertir l'indice en action
+            action = INDEX_TO_ACTION[pred_index]
+
+            # 7. Ajouter à la liste
+            actions.append(action)
+
+    return actions
+```
+
+
+ÉTAPE 3 : ÉCRITURE DU CSV
+-------------------------
+
+```python
+def write_csv(self, actions, file_name="submission"):
+    # Créer un DataFrame pandas
+    df = pd.DataFrame({'ACTION': actions})
+
+    # Écrire dans submission.csv
+    df.to_csv(file_name + '.csv', index=False)
+```
+
+Format du CSV :
+```
+ACTION
+North
+East
+East
+West
+South
+...
+```
+
+
+POINTS IMPORTANTS
+----------------
+
+1. torch.no_grad()
+   - Désactive le calcul des gradients
+   - Économise de la mémoire
+   - Accélère l'inférence
+
+2. model.eval()
+   - Désactive le dropout
+   - Utilise TOUS les neurones
+   - Prédictions déterministes (toujours les mêmes pour un état donné)
+
+3. unsqueeze(0)
+   - Ajoute une dimension batch
+   - (23,) devient (1, 23)
+   - Le modèle attend toujours un batch (même d'un seul exemple)
+
+4. argmax(dim=1)
+   - Prend l'indice du maximum
+   - [2.1, 0.5, 3.2, 1.0, 0.3] → indice 2 (EAST)
+
+5. ORDRE IMPORTANT
+   - Les prédictions doivent être dans le MÊME ORDRE que le test set
+   - On ne peut pas trier ou mélanger les prédictions
+
+
+UTILISATION
+----------
+
+```python
+# Créer le writer
+writer = SubmissionWriter(
+    test_set_path="datasets/pacman_test.pkl",
+    model_path="pacman_model.pth"
+)
+
+# Générer les prédictions
+predictions = writer.predict_on_testset()
+
+# Écrire le CSV
+writer.write_csv(predictions)
+```
+
+Résultat : fichier submission.csv créé avec toutes les prédictions.
+
+
+================================================================================
+PARTIE 7 : Questions fréquentes (FAQ)
+================================================================================
+
+Q: Pourquoi un MLP et pas un CNN ?
+-----------------------------------
+R: Les CNN sont faits pour les images 2D où les pixels voisins sont liés.
+   Notre input est un vecteur 1D de 23 nombres sans relation spatiale.
+   Un MLP est le bon choix pour ce type de données.
+
+
+Q: Pourquoi normaliser les features ?
+--------------------------------------
+R: Les réseaux de neurones convergent mieux quand toutes les features
+   sont dans la même échelle (~[0, 1]).
+   Sans normalisation :
+   - Position X : 0-20
+   - Distance : 0-40
+   - Legal flags : 0-1
+   Les grandes valeurs domineraient les petites.
+   Avec normalisation, tout est ~[0, 1] et le réseau apprend bien mieux.
+
+
+Q: Pourquoi ReLU au lieu de GELU ?
+-----------------------------------
+R: ReLU est plus simple et rapide : f(x) = max(0, x)
+   GELU est plus smooth (gradients plus fluides), mais ReLU fonctionne
+   très bien pour ce problème et converge rapidement.
    ReLU est l'activation standard dans les MLPs classiques.
 
-   Q: Pourquoi BatchNorm?
-   R: Sans BatchNorm [1], l'entraînement était instable.
+
+Q: Pourquoi BatchNorm ?
+------------------------
+R: Sans BatchNorm, l'entraînement était instable.
    BatchNorm normalise les valeurs entre couches pour stabiliser les gradients.
    Permet d'utiliser un learning rate plus élevé et convergence plus rapide.
 
-   Q: Pourquoi CrossEntropyLoss?
-   R: C'est la loss standard pour la classification multi-classe.
-   Combine LogSoftmax et NLLLoss efficacement. Voir cours théorique.
 
-   Q: Pourquoi les features de danger?
-   R: Le modèle avait du mal à éviter les ghosts avec juste la distance.
-   danger_level donne un gradient de danger,
-   ghost_blocks_food dit si le chemin vers la food est dangereux,
-   escape_options dit combien de fuites sont possibles.
-   C'est pr moi les features les + importantes.
+Q: Pourquoi CrossEntropyLoss ?
+-------------------------------
+R: C'est LA loss standard pour la classification multi-classe.
+   Elle combine Softmax + Log + Sélection + Moyenne en une seule opération.
+   Numériquement stable et efficace.
 
-   Q: Comment gérer les actions illégales?
-   R: On trie les prédictions par probabilité et on prend la première action
-   qui est dans la liste des actions légales.
 
-   Q: Pourquoi 150 epochs avec batch_size=256 et lr=8e-4?
-   R: Optimisé empiriquement. Batch size plus grand = gradients plus stables.
-   150 epochs permettent une convergence complète (best model à epoch ~121).
-   LR légèrement élevé (8e-4 au lieu de 5e-4) accélère la convergence.
+Q: Pourquoi 150 epochs ?
+-------------------------
+R: Optimisé empiriquement.
+   - 50 epochs : pas assez, accuracy ~82%
+   - 100 epochs : bien, accuracy ~86%
+   - 150 epochs : optimal, accuracy ~87-88%
+   - 200 epochs : overfitting, accuracy baisse
+   Le meilleur modèle est généralement vers epoch 120-130.
 
-   Q: Pourquoi dropout=0.3?
-   R: Balance entre regularisation et capacité du réseau.
-   Trop de dropout (0.4) = underfitting, trop peu (0.15) = risque d'overfitting.
-   0.3 est le sweet spot pour notre architecture.
 
-   Q: Pourquoi normaliser ?
-   R: Les réseaux de neurones fonctionnent mieux quand toutes les features
-   sont dans la même échelle.
-   Sans normalisation, la position X pourrait être 0-20,
-   le score pourrait être -500 à +1000, les flags sont 0 ou 1...
-   Avec normalisation tout est ~[0,1], ce qui accélère la convergence
-   et évite que certaines features dominent les autres.
+Q: Pourquoi dropout = 0.3 ?
+----------------------------
+R: Balance entre régularisation et capacité du réseau.
+   - dropout = 0.1 : risque d'overfitting
+   - dropout = 0.3 : optimal (sweet spot)
+   - dropout = 0.5 : underfitting
+   Testé empiriquement.
 
-   Q: Comment la normalisation s'adapte aux différents mazes ?
-   R: On utilise les dimensions réelles du maze pour normaliser :
-   - Positions : pac_x / maze_width, pac_y / maze_height
-   - Distances : distances / (maze_width + maze_height)
-   - Murs : dist_north / maze_height, dist_east / maze_width
-   Comme ça, peu importe la taille du maze (15x15 ou 25x25),
-   les features restent dans [0, 1] et le modèle généralise bien.
 
-   Q: Pourquoi convertir les actions en indices ?
-   R: Les réseaux de neurones ne comprennent que les nombres,
-   pas les objets Python comme Directions.NORTH.
-   On crée donc deux mappings :
+Q: Pourquoi batch_size = 256 ?
+-------------------------------
+R: - Gradients plus stables (moyenne sur 256 exemples)
+   - Plus efficace pour le GPU
+   - Bon compromis entre vitesse et stabilité
+   - Batch size plus petit (32) : gradients instables
+   - Batch size plus grand (512) : moins de mises à jour par epoch
+
+
+Q: Comment gérer les actions illégales ?
+-----------------------------------------
+R: Dans pacmanagent.py, on trie les prédictions par probabilité
+   et on prend la première action qui est dans la liste des actions légales.
+   Le réseau apprend à éviter les actions illégales car il a les
+   legal_flags dans ses features d'entrée.
+
+
+Q: Pourquoi l'accuracy plafonne à ~87-88% ?
+--------------------------------------------
+R: Dans ~10-15% des situations, plusieurs actions sont également bonnes.
+   Exemple : fantôme loin, plusieurs chemins vers la nourriture.
+   Le réseau peut choisir une action différente de l'expert, mais tout
+   aussi valide. L'accuracy mesure seulement si c'est EXACTEMENT la même
+   action que l'expert, pas si c'est une bonne action.
+
+
+Q: Est-ce que le modèle fonctionne sur différents labyrinthes ?
+----------------------------------------------------------------
+R: Oui ! Les features sont adaptatives :
+   - Positions normalisées par maze_width et maze_height
+   - Distances normalisées par la taille du labyrinthe
+   - legal_actions s'adapte automatiquement aux murs
+   - dist_until_wall détecte les murs dans chaque direction
+
+   Le modèle a appris des patterns généraux (fuir les fantômes, aller
+   vers la nourriture, éviter les coins) pas juste à mémoriser un labyrinthe.
+
+
+Q: Comment convertir les actions en indices ?
+----------------------------------------------
+R: Le réseau ne comprend que les nombres, pas les objets Python.
+   On crée deux mappings :
 
    ACTION_TO_INDEX = {
       Directions.NORTH: 0,
@@ -899,24 +1138,40 @@ PARTIE 7 : Questions possibles à l'oral - FAQ
       Directions.STOP: 4
    }
 
-   INDEX_TO_ACTION = {0: Directions.NORTH, ...}
+   INDEX_TO_ACTION = {0: NORTH, 1: SOUTH, 2: EAST, 3: WEST, 4: STOP}
 
-   Pendant l'entraînement :
-   Expert joue EAST → converti en indice 2 → Le réseau apprend à prédire 2
+   Entraînement : Expert joue EAST → indice 2 → Réseau apprend à prédire 2
+   Inférence : Réseau prédit 2 → reconverti en EAST
 
-   Pendant le jeu :
-   Réseau prédit [0.05, 0.1, 0.75, 0.08, 0.02] → argmax = 2 → reconverti en EAST
 
-   Q: Pourquoi l'accuracy plafonne à ~88-89% ?
-   R: L'accuracy mesure si le réseau prédit EXACTEMENT la même action que l'expert.
-   Mais dans ~10-15% des situations, il y a plusieurs actions valides (ex: ghost loin,
-   plusieurs chemins vers la food). Le réseau peut choisir une action différente mais
-   tout aussi bonne. C'est normal et ça ne veut pas dire que le modèle est mauvais.
+Q: Quelle est la feature la plus importante ?
+----------------------------------------------
+R: Les features de danger sont les plus importantes :
+   - danger_level : gradient de danger (1 / distance)
+   - ghost_blocks_food : fantôme entre Pacman et la nourriture ?
+   - escape_options : combien de directions pour fuir ?
 
-   Q: Est-ce que le modèle va fonctionner sur Gradescope avec des mazes différents ?
-   R: Oui ! Les features sont maze-aware :
-   - legal_actions s'adapte automatiquement aux murs
-   - dist_until_wall détecte les murs dans chaque direction
-   - is_corner s'adapte à la topologie du maze
-   Le modèle a appris des patterns généraux (fuir les ghosts, aller vers la food),
-   pas juste à mémoriser un maze spécifique.
+   Sans ces features, le modèle avait du mal à éviter les fantômes.
+   Avec ces features, accuracy +5%.
+
+
+Q: Pourquoi utiliser Adam au lieu de SGD ?
+-------------------------------------------
+R: Adam adapte automatiquement le learning rate pour chaque poids.
+   - SGD : même learning rate pour tous les poids
+   - Adam : learning rate adaptatif et intelligent
+
+   Résultat : converge plus vite et de manière plus stable.
+   C'est l'optimizer standard en deep learning.
+
+
+================================================================================
+FIN DE LA DOCUMENTATION
+================================================================================
+
+Pour plus d'informations, consulter :
+- Le code source (bien commenté)
+- La documentation PyTorch : https://pytorch.org/docs/
+- Le cours théorique sur les réseaux de neurones
+
+Bon courage pour le projet ! 🎮

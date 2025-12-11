@@ -15,28 +15,28 @@ class PacmanNetwork(nn.Module):
         self,
         input_features=23,
         num_actions=5,
-        hidden_dims=[256, 128, 64],
-        activation=nn.ReLU(),
+        hidden_dims=[128, 64, 32],
+        activation=nn.GELU(),
         dropout=0.3
     ):
         super().__init__()
 
         layers = []
 
-        # Input layer: 23 → 256
+        # Input layer: 23 → 128
         layers.append(nn.Linear(input_features, hidden_dims[0]))
         layers.append(nn.BatchNorm1d(hidden_dims[0]))  # Normalize activations
         layers.append(activation)
         layers.append(nn.Dropout(dropout))  # Prevent overfitting
 
-        # Hidden layers: 256 → 128 → 64
+        # Hidden layers: 128 → 64 → 32
         for i in range(len(hidden_dims) - 1):
             layers.append(nn.Linear(hidden_dims[i], hidden_dims[i + 1]))
             layers.append(nn.BatchNorm1d(hidden_dims[i + 1]))
             layers.append(activation)
             layers.append(nn.Dropout(dropout))
 
-        # Output layer: 64 → 5 (no activation, raw logits)
+        # Output layer: 32 → 5 (no activation, raw logits)
         layers.append(nn.Linear(hidden_dims[-1], num_actions))
 
         self.net = nn.Sequential(*layers)
