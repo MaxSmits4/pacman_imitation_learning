@@ -183,7 +183,7 @@ PARTIE 0 : Comment fonctionne un réseau de neurones ?
    - Gradient = -0.3
    - Signification : Si j'augmente w, la loss DIMINUE (c'est bien !)
 
-   loss.backward() calcule automatiquement TOUS les gradients pour TOUS les poids.
+   loss.backward() calcule automatiquement TOUS les gradients pour TOUS les poids
    C'est de la magie mathématique qui utilise la règle de la chaîne en calcul différentiel.
    PyTorch fait toute cette rétropropagation automatiquement !
 
@@ -247,7 +247,7 @@ PARTIE 0 : Comment fonctionne un réseau de neurones ?
    3. Adapte le learning rate pour chaque poids individuellement
 
    Résultat : Adam converge PLUS VITE et de manière PLUS STABLE que Gradient Descent classique.
-   C'est pour ça qu'on l'utilise (et presque tout le monde en deep learning l'utilise).
+   C'est pour ça qu'on l'utilise (et presque tout le monde en deep learning l'utilise)
 
    En résumé :
    - Gradient Descent : learning_rate fixe pour tous les poids
@@ -255,19 +255,30 @@ PARTIE 0 : Comment fonctionne un réseau de neurones ?
 
    ÉTAPE 6 : Le cycle complet (1 itération d'entraînement)
 
-   1. optim.zero_grad()
-      → Efface les anciens gradients (sinon ils s'accumulent)
+   ORDRE CORRECT (exactement comme dans train.py) :
 
-   2. loss = model.loss(features, actions)
-      → Forward pass : calcule la prédiction et la loss
+   1. loss = model.loss(features, actions)
+      → Forward pass + calcul de la loss
+      → Calcule les prédictions ET compare avec les vraies actions
+
+   2. optim.zero_grad()
+      → Efface les anciens gradients (CRUCIAL sinon ils s'accumulent !)
+      → Remet tous les gradients à zéro avant le nouveau backward
 
    3. loss.backward()
-      → Backward pass : calcule les gradients
+      → Backward pass : calcule les gradients pour TOUS les poids
+      → Remonte la loss vers l'entrée en calculant ∇W L
 
    4. optim.step()
-      → Met à jour les poids avec les gradients
+      → Met à jour les poids avec les gradients calculés
+      → Applique : W ← W - learning_rate × gradient (avec Adam)
 
-   On répète ce cycle des MILLIERS de fois (150 epochs × 47 batches = 7050 itérations).
+   IMPORTANT : Pourquoi zero_grad() APRÈS le forward et AVANT le backward ?
+   - Les gradients s'ACCUMULENT par défaut dans PyTorch
+   - Si tu ne les effaces pas, le nouveau gradient s'ADDITIONNE à l'ancien !
+   - Donc on doit faire zero_grad() avant chaque nouveau backward
+
+   On répète ce cycle des MILLIERS de fois (150 epochs × 47 batches ≈ 7050 itérations).
    À chaque itération, les poids s'améliorent un peu.
 
    ÉTAPE 7 : Pourquoi des epochs et des batches ?
@@ -286,20 +297,22 @@ PARTIE 0 : Comment fonctionne un réseau de neurones ?
 
    ÉTAPE 8 : Résumé visuel du pipeline
 
-   ENTRAÎNEMENT (on modifie les poids) :
+   ENTRAÎNEMENT (on modifie les poids) - ORDRE EXACT DU CODE :
    ┌─────────────────────────────────────────────────────┐
    │  for epoch in range(150):                          │
-   │    for batch in dataset:                           │
+   │    for features, actions in loader_train:          │
    │                                                     │
-   │      1. features, actions = batch                  │
+   │      1. loss = model.loss(features, actions)       │
+   │         → Forward pass + calcul loss               │
    │         ↓                                           │
-   │      2. predictions = model(features)  [FORWARD]   │
+   │      2. optim.zero_grad()                          │
+   │         → Efface les anciens gradients             │
    │         ↓                                           │
-   │      3. loss = compare(predictions, actions)       │
+   │      3. loss.backward()                            │
+   │         → Backward pass (calcule gradients)        │
    │         ↓                                           │
-   │      4. loss.backward()  [BACKWARD → gradients]    │
-   │         ↓                                           │
-   │      5. optim.step()  [Update weights]             │
+   │      4. optim.step()                               │
+   │         → Update weights avec les gradients        │
    │         ↓                                           │
    │      Les poids sont maintenant meilleurs !         │
    └─────────────────────────────────────────────────────┘
@@ -322,10 +335,6 @@ PARTIE 0 : Comment fonctionne un réseau de neurones ?
 
    Chaque LIGNE = 1 état de jeu différent (position Pacman, ghost, food, etc.)
    Chaque COLONNE = 1 feature parmi les 23 (ex: colonne 0 = position X de Pacman)
-
-   On traite 256 états EN MÊME TEMPS pour :
-   - Paralléliser les calculs sur GPU (plus rapide)
-   - Avoir un gradient plus stable (moyenne sur 256 exemples)
 
    En PyTorch : features.shape = torch.Size([256, 23])
                                             ↑     ↑
@@ -384,7 +393,7 @@ PARTIE 0 : Comment fonctionne un réseau de neurones ?
    ┌───────────────────────────────────────────────────┐
    │ Linear(64, 5) ← Reçoit ∇loss                      │
    │ Calcule : ∇W₄ (gradient des poids de la couche)  │
-   │ Propage : gradient vers la couche précédente     │
+   │ Propage : gradient vers la couche précédente     │ 
    └───────────────────────────────────────────────────┘
        ↑
    ┌───────────────────────────────────────────────────┐

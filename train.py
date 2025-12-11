@@ -113,14 +113,14 @@ if __name__ == "__main__":
     # Training mode = enable learning-specific behaviors.
     model.train()
 
-    for epoch in range(epochs):
+    for epoch in range(epochs): #THE training loop
         for features, actions in loader_train:
             # By convention, model.loss(...) computes an empirical loss:
             #   L̂(θ) = (1/N) Σ_i ℓ(f_θ(x_i), y_i)
             # where ℓ is the cross-entropy since this is multi-class classification.
             #
             # This is the quantity we actually minimize in practice.
-            loss = model.loss(features, actions)
+            loss = model.loss(features, actions) #forwards pass & calcul loss
 
             # Empty previous gradient values of tracked parameters
             optim.zero_grad()
