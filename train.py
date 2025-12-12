@@ -60,7 +60,7 @@ def evaluate_accuracy(model, loader, device):
             actions = actions.to(device, dtype=torch.long) # type long car ce sont des indice de class
             outputs = model(features) # model output prediction: [batch_size, 5] -> chaque output est link a un tenseur 1D de 5 schore
             _, predicted = torch.max(outputs, dim=1) # selectionne le max qui est la classe prédie
-            total += actions.size() # ici pourquoi 0 ?????????????????
+            total += actions.size(0)  # size(0) = nombre d'éléments dans le batch
             correct += (predicted == actions).sum().item()
     # END: MNIST
 
@@ -129,30 +129,174 @@ if __name__ == "__main__":
         # dataloader: outil qui decompose le dataset en batch (parti de par exemple 256 item du dataset
         # et mélanger -> pour que chaque batch soit représentatif de tout le data set)
         for features, actions in loader_train:
-            # By convention, model.loss(...) computes an empirical loss:
-            #   L̂(θ) = (1/N) Σ_i ℓ(f_θ(x_i), y_i)
-            # where ℓ is the cross-entropy since this is multi-class classification.
+            # ═══════════════════════════════════════════════════════════════════
+            # TRAINING STEP: Forward → Loss → Backward → Update
+            # ═══════════════════════════════════════════════════════════════════
+            # This is ONE optimization step on ONE batch.
+            # Each epoch has ~47 batches (12015 samples / 256 batch_size ≈ 47)
             #
-            # This is the quantity we actually minimize in practice.
+            # INPUT:
+            #   features: [batch_size, 23] game states
+            #   actions: [batch_size] expert actions (0-4)
+            #
+            # Example batch (batch_size=256):
+            #   features shape: [256, 23]
+            #   actions shape: [256]
+            #
+            # ───────────────────────────────────────────────────────────────────
+            # STEP 1: FORWARD PASS + COMPUTE LOSS
+            # ───────────────────────────────────────────────────────────────────
+            # Computes empirical loss on this batch:
+            #   L̂(θ) = (1/N) Σᵢ₌₁ᴺ ℓ(f_θ(xᵢ), yᵢ)
+            #
+            # Where:
+            #   N = batch_size (256)
+            #   f_θ(xᵢ) = model prediction for example i
+            #   yᵢ = true action for example i
+            #   ℓ = cross-entropy loss (for multi-class classification)
+            #
+            # CONCRETE:
+            # For each of 256 examples:
+            #   1. Forward pass: xᵢ → [23→128→64→32→5] → logits
+            #   2. Compute loss: -log(softmax(logits)[yᵢ])
+            #   3. Average over 256 examples → single scalar loss
+            #
+            # Example output: loss = 1.234 (scalar tensor)
             loss = model.loss(features, actions)
 
-            # Empty previous gradient values of tracked parameters
+            # ───────────────────────────────────────────────────────────────────
+            # STEP 2: ZERO GRADIENTS
+            # ───────────────────────────────────────────────────────────────────
+            # Gradients ACCUMULATE by default in PyTorch.
+            # We need to reset them to zero before computing new gradients.
+            #
+            # Sets ALL .grad attributes to zero:
+            #   model.net[0].weight.grad = zeros([128, 23])
+            #   model.net[0].bias.grad = zeros([128])
+            #   ... (for all layers)
             optim.zero_grad()
 
-            # Backprop computes gradients of the empirical loss:
-            #   ∇_θ L̂(θ) -> it's here that we compute the gradient
-            #   on dérive chaque parametre un a un θ (chaque poids entre les neurone), pour chaque un regarde ça derivée
-            #   du coup ci c'est positif ça signifie que ce parametre augmente la loss -> il faudra le diminuer
-            #   si la derrivée est negative, ce poid diminue la loss -> il faudra l'augmenter
-            #   Forward → Loss → Backward → Update weights
+            # ═══════════════════════════════════════════════════════════════════
+            # BACKPROPAGATION: Compute gradients ∇_θ L̂(θ)
+            # ═══════════════════════════════════════════════════════════════════
+            # This is where PyTorch computes ALL gradients using chain rule.
+            #
+            # GRADIENT = Derivative of loss with respect to each parameter
+            # For each weight w and bias b in the network:
+            #   gradient = ∂L/∂w  or  ∂L/∂b
+            #
+            # WHAT IT MEANS:
+            # "If I increase this parameter by a tiny amount, how much does the loss change?"
+            #
+            # - If ∂L/∂w > 0 (positive): increasing w increases loss
+            #   → We should DECREASE w to reduce loss
+            #
+            # - If ∂L/∂w < 0 (negative): increasing w decreases loss
+            #   → We should INCREASE w to reduce loss
+            #
+            # CONCRETE EXAMPLE - Neurone 1 of first hidden layer (23→128):
+            # This neuron has 24 parameters: 23 weights + 1 bias
+            #
+            # After backward(), these gradients are stored in:
+            #   model.net[0].weight.grad[0]  →  [23] gradient values for weights
+            #   model.net[0].bias.grad[0]    →  1 gradient value for bias
+            #
+            # Example gradient values:
+            #   ∂L/∂w₁,₁ = 0.05   → weight w₁,₁ should decrease slightly
+            #   ∂L/∂w₁,₂ = -0.12  → weight w₁,₂ should increase
+            #   ∂L/∂w₁,₃ = 0.03   → weight w₁,₃ should decrease slightly
+            #   ...
+            #   ∂L/∂b₁ = -0.08    → bias b₁ should increase
+            #
+            # HOW PYTORCH COMPUTES THIS (Chain Rule):
+            # Starting from loss L, going backward through layers:
+            #
+            # ∂L/∂w = ∂L/∂output · ∂output/∂activation · ∂activation/∂z · ∂z/∂w
+            #         ↑            ↑                      ↑               ↑
+            #    (from next    (Dropout)            (GELU)        (= input)
+            #      layer)      (BatchNorm)
+            #
+            # For a weight in layer L:
+            # ∂L/∂wᴸ = (gradient from layer L+1) · (local gradient at layer L)
+            #
+            # This propagates backward from output (layer 5) to input (layer 1).
+            #
+            # VISUALIZATION OF GRADIENT FLOW:
+            # Loss (scalar)
+            #   ↓ ∂L/∂logits
+            # Linear5 (32→5)  ← gradients: ∂L/∂W⁵, ∂L/∂b⁵
+            #   ↓ ∂L/∂a⁴
+            # Dropout4
+            #   ↓
+            # GELU4
+            #   ↓
+            # BatchNorm4  ← gradients: ∂L/∂γ⁴, ∂L/∂β⁴
+            #   ↓ ∂L/∂z⁴
+            # Linear4 (64→32)  ← gradients: ∂L/∂W⁴, ∂L/∂b⁴
+            #   ↓
+            # ... (continues backward through all layers)
+            #   ↓
+            # Linear1 (23→128)  ← gradients: ∂L/∂W¹, ∂L/∂b¹
+            #
+            # After backward(), ALL parameters have their .grad filled with
+            # the derivative of the loss with respect to that parameter.
             loss.backward()
 
-            # Parameter update step (optimization):
-            # Canonical SGD-style formula:
-            #   θ ← θ - η ∇_θ L̂(θ)
-            #   -> tweaking des poids sur base du backward
-            # With Adam, the update is still driven by ∇_θ L̂(θ),
-            # but the effective step is adaptively scaled.
+            # ═══════════════════════════════════════════════════════════════════
+            # OPTIMIZER STEP: Update parameters using gradients
+            # ═══════════════════════════════════════════════════════════════════
+            # Now that we have gradients (from backward()), we update the weights.
+            #
+            # VANILLA GRADIENT DESCENT FORMULA:
+            #   θ_new = θ_old - η · ∇L(θ)
+            #
+            # Where:
+            #   θ = parameter (weight or bias)
+            #   η (eta) = learning rate (8e-4 in our case)
+            #   ∇L(θ) = gradient (computed by backward())
+            #
+            # CONCRETE EXAMPLE with one weight:
+            #   Current value: w₁,₁ = 0.5
+            #   Gradient: ∂L/∂w₁,₁ = 0.2 (positive → should decrease)
+            #   Learning rate: η = 0.001
+            #
+            #   Update:
+            #   w₁,₁ ← 0.5 - 0.001 × 0.2 = 0.5 - 0.0002 = 0.4998
+            #
+            # If gradient was negative (-0.2):
+            #   w₁,₁ ← 0.5 - 0.001 × (-0.2) = 0.5 + 0.0002 = 0.5002
+            #
+            # ADAM OPTIMIZER (what we actually use):
+            # Adam is smarter than vanilla gradient descent. Instead of:
+            #   θ ← θ - η · gradient
+            #
+            # Adam uses:
+            #   θ ← θ - η · (adapted_gradient)
+            #
+            # Where adapted_gradient takes into account:
+            #   1) Momentum: exponential moving average of past gradients
+            #      → Helps overcome local minima, smooths updates
+            #
+            #   2) Adaptive learning rate: different effective η for each parameter
+            #      → Parameters with large gradients get smaller steps
+            #      → Parameters with small gradients get larger steps
+            #
+            # Adam formulas (simplified):
+            #   m ← β₁·m + (1-β₁)·gradient        (momentum)
+            #   v ← β₂·v + (1-β₂)·gradient²       (variance)
+            #   θ ← θ - η · m/√(v + ε)             (update)
+            #
+            # Where β₁≈0.9, β₂≈0.999 (default Adam parameters)
+            #
+            # WHAT HAPPENS IN CODE:
+            # For EVERY parameter in the model:
+            #   1. Read current value: θ_old
+            #   2. Read gradient: ∂L/∂θ (from .grad)
+            #   3. Compute adaptive step using Adam formula
+            #   4. Update: θ_new = θ_old - step
+            #
+            # After this line, all weights and biases have been updated to
+            # (hopefully) reduce the loss on future predictions.
             optim.step()
         # END: MNIST
 
