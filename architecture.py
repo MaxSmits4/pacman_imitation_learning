@@ -128,7 +128,7 @@ class PacmanNetwork(nn.Module):
         # Linear: z = x·W^T + b, where W is [128, 23], b is [128]
         # Creates 128 neurons, each processing all 23 input features
         layers.append(nn.Linear(input_features, hidden_dims[0]))
-
+    
         # BatchNorm: Normalizes the 128 outputs (neuron by neuron over batch)
         # Has 128 γ (weight) and 128 β (bias) learnable parameters
         layers.append(nn.BatchNorm1d(hidden_dims[0]))
@@ -233,7 +233,7 @@ class PacmanNetwork(nn.Module):
         True action: 0 (go North)
 
         Softmax:
-        exp([2.1, -0.5, 1.3, 0.2, -1.1]) / sum(exp(...))
+        exp([2.1, -0.5, 1.3, 0.2, -1.1]) / sum(exp(.C..))
         ≈ [0.65, 0.05, 0.29, 0.10, 0.03]
 
         Loss for this example:

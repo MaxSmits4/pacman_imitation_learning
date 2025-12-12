@@ -115,8 +115,8 @@ Exemple simple :
 - Son gradient = -0.3
 - Signification : Si j'augmente w, la loss diminue ! (c'est bien)
 
-Le réseau contient 47,168 poids au total.
-PyTorch calcule automatiquement le gradient de CHAQUE poids avec loss.backward().
+Le réseau contient 14,021 paramètres apprenables au total.
+PyTorch calcule automatiquement le gradient de CHAQUE paramètre avec loss.backward().
 
 
 ÉTAPE 5 : Comment ajuster les poids ? (Optimizer)
@@ -126,12 +126,12 @@ Maintenant qu'on a les gradients, on met à jour les poids.
 
 IMPORTANT : Les gradients sont des MATRICES !
 - La loss L = 1 nombre (scalaire)
-- Les poids W = matrice (par exemple 256 × 23)
+- Les poids W = matrice (par exemple 128 × 23)
 - Le gradient ∇W L = matrice de la MÊME TAILLE que W
 
-Exemple pour Linear(23, 256) :
-   W = matrice (256, 23) avec 5,888 poids
-   ∇W = matrice (256, 23) avec 5,888 gradients
+Exemple pour Linear(23, 128) :
+   W = matrice (128, 23) avec 2,944 poids
+   ∇W = matrice (128, 23) avec 2,944 gradients
 
 Chaque case du gradient indique :
    "Si j'augmente ce poids, est-ce que la loss augmente ou diminue ?"
@@ -150,7 +150,7 @@ Exemple pour UN poids :
 - Learning rate : 0.0008
 - Nouveau poids : w = 0.5 - 0.0008 × (-0.3) = 0.50024
 
-Mais on fait ça pour les 47,168 poids du réseau !
+Mais on fait ça pour les 14,021 paramètres du réseau !
 
 On utilise Adam (optimizer intelligent) :
 - Il adapte automatiquement le learning_rate pour chaque poids
@@ -212,15 +212,15 @@ Visualisation :
          |
          | ← ICI : Linear → BatchNorm → ReLU → Dropout
          |
-   [Hidden 1]    ○ ○ ○ ... (256 neurones)
+   [Hidden 1]    ○ ○ ○ ... (128 neurones)
          |
          | ← ICI : Linear → BatchNorm → ReLU → Dropout
          |
-   [Hidden 2]    ○ ○ ○ ... (128 neurones)
+   [Hidden 2]    ○ ○ ○ ... (64 neurones)
          |
          | ← ICI : Linear → BatchNorm → ReLU → Dropout
          |
-   [Hidden 3]    ○ ○ ○ ... (64 neurones)
+   [Hidden 3]    ○ ○ ○ ... (32 neurones)
          |
          | ← ICI : Linear (pas d'activation)
          |
@@ -232,32 +232,32 @@ Tout le travail se passe dans les connexions (|) entre les couches !
 
 Qu'est-ce que fait chaque opération ?
 
-1. Linear(23, 256) :
+1. Linear(23, 128) :
    - Prend 23 valeurs en entrée
    - Fait des calculs : y = W @ x + b (multiplication matricielle)
-   - Produit 256 valeurs en sortie
+   - Produit 128 valeurs en sortie
    - Chaque valeur = combinaison pondérée des 23 entrées
 
-   IMPORTANT : W est une MATRICE (256, 23) !
-   - Chaque neurone de sortie (256 au total) a besoin de 23 poids
-   - Total : 256 × 23 = 5,888 poids dans la matrice W
+   IMPORTANT : W est une MATRICE (128, 23) !
+   - Chaque neurone de sortie (128 au total) a besoin de 23 poids
+   - Total : 128 × 23 = 2,944 poids dans la matrice W
 
    Exemple visuel :
    W = ┌                     ┐
        │ w₁,₁  w₁,₂  ... w₁,₂₃ │  ← 23 poids du neurone 1
        │ w₂,₁  w₂,₂  ... w₂,₂₃ │  ← 23 poids du neurone 2
        │  ...   ...  ...  ...  │
-       │ w₂₅₆,₁ ...  w₂₅₆,₂₃   │  ← 23 poids du neurone 256
+       │ w₁₂₈,₁ ...  w₁₂₈,₂₃   │  ← 23 poids du neurone 128
        └                       ┘
 
    Pourquoi une matrice ?
    Dans un réseau fully-connected, CHAQUE neurone de sortie
    est connecté à TOUS les neurones d'entrée.
    → Il faut un poids par connexion
-   → 256 neurones × 23 connexions = matrice (256, 23)
+   → 128 neurones × 23 connexions = matrice (128, 23)
 
-2. BatchNorm1d(256) :
-   - Normalise les 256 valeurs
+2. BatchNorm1d(128) :
+   - Normalise les 128 valeurs
    - Centre autour de 0, variance ~1
    - Stabilise l'entraînement
 
@@ -290,20 +290,20 @@ Avec ReLU : on peut apprendre des fonctions complexes
 
 IMPORTANT : UN NEURONE = UN SEUL NOMBRE (pas un vecteur)
 
-Exemple avec Linear(23, 256) :
+Exemple avec Linear(23, 128) :
 - On a 23 valeurs en entrée : [0.5, -0.2, 0.8, ..., 1.0]
-- On crée 256 neurones différents
+- On crée 128 neurones différents
 - Chaque neurone calcule SA PROPRE somme pondérée :
 
    Neurone 1: w₁₁×0.5 + w₁₂×(-0.2) + ... + b₁ = 2.3   ← UN nombre
    Neurone 2: w₂₁×0.5 + w₂₂×(-0.2) + ... + b₂ = -0.7  ← UN nombre
    Neurone 3: w₃₁×0.5 + w₃₂×(-0.2) + ... + b₃ = 1.5   ← UN nombre
    ...
-   Neurone 256: w₂₅₆×0.5 + ... + b₂₅₆ = 0.9           ← UN nombre
+   Neurone 128: w₁₂₈×0.5 + ... + b₁₂₈ = 0.9           ← UN nombre
 
-Output : [2.3, -0.7, 1.5, ..., 0.9]  (256 nombres)
+Output : [2.3, -0.7, 1.5, ..., 0.9]  (128 nombres)
 
-Ensuite ces 256 nombres passent par BatchNorm, ReLU, Dropout :
+Ensuite ces 128 nombres passent par BatchNorm, ReLU, Dropout :
 
    Après Linear:    [2.3, -0.7, 1.5, ..., 0.9]
    Après BatchNorm: [1.1, -0.3, 0.8, ..., 0.5]  (normalisés)
@@ -337,12 +337,19 @@ Ces 6 poids forment une matrice W de taille (2, 3) :
 En notation matricielle : y = W @ x + b
 
 Dans notre réseau Pacman :
-- Linear(23, 256)  → W₁ : matrice 256×23 = 5,888 poids !
-- Linear(256, 128) → W₂ : matrice 128×256 = 32,768 poids !
-- Linear(128, 64)  → W₃ : matrice 64×128 = 8,192 poids !
-- Linear(64, 5)    → W₄ : matrice 5×64 = 320 poids !
+- Linear(23, 128)  → W₁ : matrice 128×23 = 2,944 poids + 128 biais = 3,072 paramètres
+- Linear(128, 64)  → W₂ : matrice 64×128 = 8,192 poids + 64 biais = 8,256 paramètres
+- Linear(64, 32)   → W₃ : matrice 32×64 = 2,048 poids + 32 biais = 2,080 paramètres
+- Linear(32, 5)    → W₄ : matrice 5×32 = 160 poids + 5 biais = 165 paramètres
 
-TOTAL : 47,168 poids dans le réseau !
+TOTAL DES POIDS LINEAR : 13,573 paramètres
+
+Avec les BatchNorm (γ et β pour chaque couche) :
+- BatchNorm1d(128) : 128 × 2 = 256 paramètres
+- BatchNorm1d(64)  : 64 × 2 = 128 paramètres
+- BatchNorm1d(32)  : 32 × 2 = 64 paramètres
+
+TOTAL AVEC BATCHNORM : 13,573 + 448 = 14,021 paramètres apprenables !
 
 
 ÉTAPE 11 : Entraînement vs Évaluation
@@ -361,7 +368,82 @@ ENTRAÎNEMENT (model.train()) :
 - PAS de backward(), PAS de step()
 
 
-ÉTAPE 12 : Analogie finale pour tout comprendre
+ÉTAPE 12 : BatchNorm en détail - Que contiennent μ, σ², γ, β et ε ?
+-------------------------------------------------------------------
+
+C'est important de comprendre que ces paramètres sont des VECTEURS (pas des scalaires) !
+
+Dans BatchNorm1d(128), voici ce qu'il y a concrètement :
+
+1. **μ (mu)** - Moyenne du batch
+   - Type : VECTEUR de taille (128,)
+   - Contenu : [0.12, -0.35, 0.87, ..., -0.23]  (128 nombres)
+   - Calculé sur le batch actuel : μ[i] = moyenne des valeurs du neurone i
+   - PAS un paramètre apprenable (recalculé à chaque forward pass)
+
+2. **σ² (sigma carré)** - Variance du batch
+   - Type : VECTEUR de taille (128,)
+   - Contenu : [0.45, 0.78, 0.23, ..., 0.91]  (128 nombres positifs)
+   - Calculé sur le batch : σ²[i] = variance des valeurs du neurone i
+   - PAS un paramètre apprenable
+
+3. **ε (epsilon)** - Constante de stabilité
+   - Type : SCALAIRE (un seul nombre)
+   - Valeur : 1e-5 = 0.00001
+   - Fixe, jamais modifié
+   - Évite la division par zéro si σ² = 0
+
+4. **γ (gamma)** - Paramètre d'échelle APPRENABLE
+   - Type : VECTEUR de taille (128,)
+   - Initialisé à : [1.0, 1.0, 1.0, ..., 1.0]  (128 fois 1)
+   - APPRENABLE : modifié par l'optimizer pendant l'entraînement
+   - Chaque neurone a son propre γ[i]
+
+5. **β (beta)** - Paramètre de décalage APPRENABLE
+   - Type : VECTEUR de taille (128,)
+   - Initialisé à : [0.0, 0.0, 0.0, ..., 0.0]  (128 fois 0)
+   - APPRENABLE : modifié par l'optimizer
+   - Chaque neurone a son propre β[i]
+
+Formule complète de BatchNorm :
+   ẑ = (z - μ) / √(σ² + ε)        ← Normalisation
+   output = γ × ẑ + β              ← Rééchelonnage
+
+Exemple concret avec un batch de 256 exemples et 128 neurones :
+
+   Input x : matrice (256, 128)  (256 exemples × 128 features)
+
+   Calcul de μ (moyenne de chaque colonne) :
+   μ[0] = moyenne de la colonne 0 sur les 256 exemples = 0.42
+   μ[1] = moyenne de la colonne 1 = -0.15
+   ...
+   μ = [0.42, -0.15, ..., 0.18]  (128 nombres)
+
+   Calcul de σ² (variance de chaque colonne) :
+   σ²[0] = variance de la colonne 0 = 0.08
+   σ²[1] = variance de la colonne 1 = 0.12
+   ...
+   σ² = [0.08, 0.12, ..., 0.09]  (128 nombres)
+
+   Normalisation (pour CHAQUE neurone) :
+   x_norm[:, i] = (x[:, i] - μ[i]) / √(σ²[i] + ε)
+
+   Rééchelonnage :
+   output[:, i] = γ[i] × x_norm[:, i] + β[i]
+
+Résumé :
+┌──────────┬──────────┬─────────┬──────────────┬────────────────────────┐
+│ Variable │   Type   │  Taille │ Apprenable ? │         Rôle           │
+├──────────┼──────────┼─────────┼──────────────┼────────────────────────┤
+│    μ     │ Vecteur  │  (128,) │      ❌      │ Moyenne du batch       │
+│    σ²    │ Vecteur  │  (128,) │      ❌      │ Variance du batch      │
+│    ε     │ Scalaire │   (1,)  │      ❌      │ Constante = 0.00001    │
+│    γ     │ Vecteur  │  (128,) │      ✅      │ Échelle (scale)        │
+│    β     │ Vecteur  │  (128,) │      ✅      │ Décalage (shift)       │
+└──────────┴──────────┴─────────┴──────────────┴────────────────────────┘
+
+
+ÉTAPE 13 : Analogie finale pour tout comprendre
 -----------------------------------------------
 
 Imagine que tu apprends à tirer au basket :
@@ -402,8 +484,8 @@ LES 5 FICHIERS PRINCIPAUX
    → Le réseau ne comprend que les nombres, pas les objets Python
 
 2. architecture.py
-   → Définit le cerveau du réseau : 23 → 256 → 128 → 64 → 5
-   → 3 couches cachées avec ReLU et Dropout
+   → Définit le cerveau du réseau : 23 → 128 → 64 → 32 → 5
+   → 4 couches cachées avec ReLU et Dropout
 
 3. train.py
    → Entraîne le réseau sur 150 epochs
@@ -614,15 +696,15 @@ On n'utilise PAS de CNN (Convolutional Neural Network) parce que :
 STRUCTURE DU RÉSEAU
 -------------------
 
-23 inputs → 256 → 128 → 64 → 5 outputs
+23 inputs → 128 → 64 → 32 → 5 outputs
 
 Input Layer:     23 neurones (nos 23 features)
-Hidden Layer 1:  256 neurones
-Hidden Layer 2:  128 neurones
-Hidden Layer 3:  64 neurones
+Hidden Layer 1:  128 neurones
+Hidden Layer 2:  64 neurones
+Hidden Layer 3:  32 neurones
 Output Layer:    5 neurones (les 5 actions)
 
-Total : 47,168 poids à apprendre !
+Total : 14,021 paramètres apprenables (incluant les biais et BatchNorm) !
 
 
 PATTERN DE CHAQUE COUCHE CACHÉE
@@ -694,7 +776,7 @@ Valeur optimale : 0.3 (testé empiriquement)
 PAS D'ACTIVATION SUR LA DERNIÈRE COUCHE
 ---------------------------------------
 
-La dernière couche est juste Linear(64, 5), sans ReLU.
+La dernière couche est juste Linear(32, 5), sans ReLU.
 
 Pourquoi ?
 - On veut des valeurs brutes (logits) : [-2.1, 0.5, 3.2, 1.0, -0.3]
@@ -708,26 +790,26 @@ CODE SIMPLIFIÉ
 def __init__(self):
     layers = []
 
-    # Couche 1 : 23 → 256
-    layers.append(nn.Linear(23, 256))
-    layers.append(nn.BatchNorm1d(256))
-    layers.append(nn.ReLU())
-    layers.append(nn.Dropout(0.3))
-
-    # Couche 2 : 256 → 128
-    layers.append(nn.Linear(256, 128))
+    # Couche 1 : 23 → 128
+    layers.append(nn.Linear(23, 128))
     layers.append(nn.BatchNorm1d(128))
     layers.append(nn.ReLU())
     layers.append(nn.Dropout(0.3))
 
-    # Couche 3 : 128 → 64
+    # Couche 2 : 128 → 64
     layers.append(nn.Linear(128, 64))
     layers.append(nn.BatchNorm1d(64))
     layers.append(nn.ReLU())
     layers.append(nn.Dropout(0.3))
 
-    # Couche de sortie : 64 → 5
-    layers.append(nn.Linear(64, 5))
+    # Couche 3 : 64 → 32
+    layers.append(nn.Linear(64, 32))
+    layers.append(nn.BatchNorm1d(32))
+    layers.append(nn.ReLU())
+    layers.append(nn.Dropout(0.3))
+
+    # Couche de sortie : 32 → 5
+    layers.append(nn.Linear(32, 5))
 
     self.net = nn.Sequential(*layers)
     self.criterion = nn.CrossEntropyLoss()
@@ -1096,6 +1178,25 @@ R: - Gradients plus stables (moyenne sur 256 exemples)
    - Batch size plus grand (512) : moins de mises à jour par epoch
 
 
+Q: Comment un neurone traite-t-il un batch ?
+---------------------------------------------
+R: Chaque neurone traite TOUS les exemples du batch en parallèle.
+
+   Exemple avec batch_size=3 et le neurone 0 de la couche Linear(23, 128):
+
+   - Il reçoit 3 vecteurs d'entrée (x₀, x₁, x₂) de 23 valeurs chacun
+   - Il a ses propres poids w₀ (23 valeurs) et biais b₀
+   - Il calcule 3 sorties (une par exemple):
+     * z₀,₀ = x₀ · w₀ + b₀ = 2.3
+     * z₁,₀ = x₁ · w₀ + b₀ = 0.9
+     * z₂,₀ = x₂ · w₀ + b₀ = -1.1
+
+   - Résultat: le neurone 0 produit une COLONNE de 3 valeurs [2.3, 0.9, -1.1]
+
+   En notation matricielle: X (3, 23) @ W^T (23, 128) → Z (3, 128)
+   Chaque colonne de Z correspond aux sorties d'un neurone sur le batch.
+
+
 Q: Comment gérer les actions illégales ?
 -----------------------------------------
 R: Dans pacmanagent.py, on trie les prédictions par probabilité
@@ -1166,12 +1267,250 @@ R: Adam adapte automatiquement le learning rate pour chaque poids.
 
 
 ================================================================================
-FIN DE LA DOCUMENTATION
+Nouvelle tentative d'explication
 ================================================================================
+──────────────────────────────────────────────────────────────────────────────
+PIPELINE (si batch = 3) : GameState → Features → 3 hiddens → Logits → Action
+──────────────────────────────────────────────────────────────────────────────
+LE DATALOADER DONNE UN BATCH 3 gamestates
 
-Pour plus d'informations, consulter :
-- Le code source (bien commenté)
-- La documentation PyTorch : https://pytorch.org/docs/
-- Le cours théorique sur les réseaux de neurones
+features X : matrice (3, 23)
+3 GameState transformés en 23 nombres chacun
 
-Bon courage pour le projet ! 🎮
+actions = y : vecteur (3,)
+
+
+──────────────────────────────────────────────────────────────────────────────
+BLOC 1 — TRAIN (APPRENDRE : loss + backward + update)
+──────────────────────────────────────────────────────────────────────────────
+Objectif TRAIN : MODIFIER les poids pour réduire l'erreur.
+
+Étape 1 — FORWARD Si X : (3, 23)
+
+VISUALISATION : Les neurones sont à la VERTICALE (colonnes)
+                Les exemples du batch sont à l'HORIZONTALE (lignes)
+
+   X = matrice (3, 23)
+       3 lignes (3 GameStates) × 23 colonnes (23 FEATURES, pas des neurones!)
+
+                  feature 0   feature 1   feature 2   feature 3   ...  feature 22
+                      ↓           ↓           ↓           ↓       ...      ↓
+   GameState 0  →   [0.5,       0.3,        0.2,        0.1,      ...     0.9]
+   GameState 1  →   [0.1,       0.8,        0.4,        0.2,      ...     0.3]
+   GameState 2  →   [0.7,       0.2,        0.6,        0.3,      ...     0.5]
+
+
+Linear(23→128) : (3, 23) -> (3, 128)
+   Calcul : z = X @ W^T + b
+   Crée les PREMIERS VRAIS NEURONES : 128 neurones à partir des 23 features
+
+   z = matrice (3, 128)
+       3 lignes (3 GameStates) × 128 colonnes (128 NEURONES)
+
+                      h0         h1         h2        h3       ...   h127
+                      ↓          ↓          ↓          ↓          ...  ↓
+   GameState 0  →   [2.3,      -0.7,      1.5,       0.2,    ...     1.8]
+   GameState 1  →   [0.9,       1.2,     -0.3,       0.8,    ...     0.5]
+   GameState 2  →   [-1.1,      0.5,      2.0,      -0.5,    ...     1.2]
+
+
+BatchNorm1d(128) : (3, 128) -> (3, 128)
+   TRAIN: calcule μ et σ² pour CHAQUE NEURONE (chaque colonne verticale)
+
+   AVANT BatchNorm (sortie de Linear) :
+                     h0        h1         h2         h3         ...  h127
+                     ↓          ↓          ↓          ↓          ...  ↓
+   GameState 0  →   [2.3,      -0.7,      1.5,       0.2,    ...     1.8]
+   GameState 1  →   [0.9,       1.2,     -0.3,       0.8,    ...     0.5]
+   GameState 2  →   [-1.1,      0.5,      2.0,      -0.5,    ...     1.2]
+
+   Pour h0 (colonne 0) :
+      Valeurs sur le batch : [2.3, 0.9, -1.1]
+      μ[0] = (2.3 + 0.9 + (-1.1)) / 3 = 0.70
+      σ²[0] = variance([2.3, 0.9, -1.1]) = 2.45
+
+   Pour h1 (colonne 1) :
+      Valeurs sur le batch : [-0.7, 1.2, 0.5]
+      μ[1] = (-0.7 + 1.2 + 0.5) / 3 = 0.33
+      σ²[1] = variance([-0.7, 1.2, 0.5]) = 0.82
+
+   Donc : μ = [0.70, 0.33, 1.07, ...128 valeurs] (un μ par neurone)
+          σ² = [2.45, 0.82, 0.55, ...128 valeurs] (un σ² par neurone)
+
+   Normalisation de CHAQUE colonne (neurone) :
+      Pour chaque neurone Hj, on normalise ses 3 valeurs avec μ[j] et σ²[j]
+
+   Puis rééchelonnage : z_final = γ * z_norm + β
+
+   APRÈS BatchNorm (normalisé + rééchelonné) :
+                 h0         h1         h2         h3         ...  h127
+                 ↓          ↓          ↓          ↓          ...  ↓
+   GameState 0  →   [1.2,      -0.5,      0.8,       0.1,    ...     0.9]
+   GameState 1  →   [0.1,       0.9,     -0.2,       0.5,    ...     0.3]
+   GameState 2  →   [-1.3,      0.3,      1.4,      -0.6,    ...     0.7]
+
+
+RueLU : (3, 128) -> (3, 128)
+   Applique max(0, x) sur CHAQUE nerone, pour CHAQUE exemple
+
+                 neurone 0  neurone 1  neurone 2  neurone 3  ...
+                     ↓          ↓          ↓          ↓
+   GameState 0  →   [1.2,      0.0,       0.8,       0.1,    ...]
+   GameState 1  →   [0.1,      0.9,       0.0,       0.5,    ...]
+   GameState 2  →   [0.0,      0.3,       1.4,       0.0,    ...]
+                     ✓          ✗          ✓          ✓
+                  (positif)  (négatif   (positif)  (positif)
+                              → 0)
+
+
+Dropout(0.3) : (3, 128) -> (3, 128)
+   TRAIN: désactive aléatoirement 30% des neurones (met la colonne entière à 0? NON!)
+   En fait: met 30% des VALEURS à 0 (élément par élément)
+
+                 neurone 0  neurone 1  neurone 2  neurone 3  ...
+                     ↓          ↓          ↓          ↓
+   GameState 0  →   [1.2,      0.0,       0.0,       0.1,    ...]
+   GameState 1  →   [0.1,      0.0,       0.0,       0.5,    ...]
+   GameState 2  →   [0.0,      0.3,       1.4,       0.0,    ...]
+
+
+
+Sortie Linear(32→5) : (3, 32) -> (3, 5)
+   On passe de 32 neurones à 5 neurones de sortie (les 5 actions)
+
+   logits = matrice (3, 5)
+
+                  NORTH    SOUTH    EAST     WEST     STOP
+                    ↓        ↓        ↓        ↓        ↓
+   GameState 0  →  [2.1,    0.5,    -0.3,    1.8,     0.2]
+   GameState 1  →  [1.2,   -0.5,     2.3,    0.1,    -0.8]
+   GameState 2  →  [0.3,    1.5,     0.7,   -1.2,     0.9]
+
+Interprétation (on cherche le max sur chaque ligne) :
+   GameState 0 : neurone NORTH = 2.1 (max) → prédiction = NORTH
+   GameState 1 : neurone EAST = 2.3 (max)  → prédiction = EAST
+   GameState 2 : neurone SOUTH = 1.5 (max) → prédiction = SOUTH
+
+
+Étape 2 — LOSS (mesurer l'erreur)
+Entrées:
+   logits : Matrice (3, 5)
+   y : (3,) = [0, 2, 1]  (actions réelles : NORTH, EAST, SOUTH)
+
+CrossEntropyLoss fait :
+   1. Softmax sur chaque ligne (transforme scores → probabilités)
+
+      Pour GameState 0 : logits = [2.1, 0.5, -0.3, 1.8, 0.2]
+      Softmax → probas = [0.42, 0.08, 0.04, 0.31, 0.06]
+
+      Pour GameState 1 : logits = [1.2, -0.5, 2.3, 0.1, -0.8]
+      Softmax → probas = [0.16, 0.03, 0.49, 0.05, 0.02]
+
+      Pour GameState 2 : logits = [0.3, 1.5, 0.7, -1.2, 0.9]
+      Softmax → probas = [0.14, 0.46, 0.21, 0.03, 0.25]
+
+   2. Prend la proba de la classe correcte
+
+      GameState 0 : y[0] = 0 (NORTH) → proba = 0.42
+      GameState 1 : y[1] = 2 (EAST)  → proba = 0.49
+      GameState 2 : y[2] = 1 (SOUTH) → proba = 0.46
+
+   3. Fait -log(proba) pour chaque exemple
+
+      GameState 0 : -log(0.42) = 0.87
+      GameState 1 : -log(0.49) = 0.71
+      GameState 2 : -log(0.46) = 0.78
+
+   4. Moyenne sur les 3 exemples
+
+      loss = (0.87 + 0.71 + 0.78) / 3 = 0.79
+
+Sortie:
+   loss = 0.79 (un seul nombre scalaire)
+
+Étape 3 — BACKWARD (calculer les gradients)
+
+loss.backward() calcule les gradients de TOUS les paramètres θ:
+
+poids/biais des Linear
+
+γ et β de BatchNorm
+
+ces gradients servent à savoir comment bouger chaque paramètre pour réduire la loss
+
+Étape 4 — UPDATE (mettre à jour les poids)
+
+optim.step() modifie les paramètres θ pour diminuer la loss
+
+Résumé TRAIN (batch=3):
+
+X (3,23) -> logits (3,5) -> loss (scalaire) -> backward -> update
+
+──────────────────────────────────────────────────────────────────────────────
+BLOC 2 — EVAL (MESURER : accuracy, pas d’apprentissage)
+──────────────────────────────────────────────────────────────────────────────
+
+Objectif EVAL : MESURER sans modifier les poids.
+
+Étape 1 — PASSER EN MODE EVAL
+
+model.eval() change le comportement de certains modules:
+
+Dropout:
+
+EVAL: OFF (ne met plus rien à 0)
+
+BatchNorm:
+
+EVAL: n’utilise plus μ/σ² du batch
+
+utilise running_mean / running_var appris pendant le training
+
+Étape 2 — FORWARD SANS GRADIENTS
+Entrée:
+
+X_test : (3, 23)
+Sortie:
+
+logits_eval : (3, 5)
+
+Étape 3 — PRÉDICTION
+
+pred = argmax(logits_eval, dim=1)
+Sortie:
+
+pred : (3,) (un indice d’action par exemple)
+
+Étape 4 — ACCURACY
+
+compare pred (3,) avec y_test (3,)
+
+accuracy = nombre de bonnes prédictions / 3
+
+Résumé EVAL (batch=3):
+
+X (3,23) -> logits (3,5) -> pred (3,) -> accuracy
+
+──────────────────────────────────────────────────────────────────────────────
+PHRASE CLÉ : “CE QUE REÇOIT CHAQUE NEURONE”
+──────────────────────────────────────────────────────────────────────────────
+
+Dans Linear(23→128), chaque neurone de sortie j:
+
+reçoit TOUTES les 23 features (la ligne X[i, :])
+
+a ses propres poids w_j (23 nombres) + un biais b_j
+
+calcule un seul nombre z[i, j] = somme_k X[i,k]*w_j[k] + b_j
+
+Avec un batch de 3:
+
+pour chaque neurone j (sur 128), tu obtiens 3 valeurs:
+z[0,j], z[1,j], z[2,j]
+Donc la sortie z de la couche vaut (3,128).
+
+BatchNorm/ReLU(GELU)/Dropout ne “créent pas” de neurones:
+
+ils transforment les valeurs (3,128) élément par élément (ou colonne par colonne pour BN).
+
+──────────────────────────────────────────────────────────────────────────────

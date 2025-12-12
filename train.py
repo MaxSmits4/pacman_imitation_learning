@@ -34,22 +34,7 @@ def evaluate_accuracy(model, loader, device):
     # Dropout OFF -> pdt la phase de training certain neurone sont etaint et ce délibérement
     # -> permet d'eviter l'overfitting: en gros un réseau au cours de l'utilisation peux ne finir par utiliser que
     # de neurone critique pour l'output -> si ceux là ce trompe, le réseau ce trompe
-    # BatchNorm inference mode: permet en mode training de normalise les batch -> sur base d'une moyenne et d'une variante
-    # glissante qui evolue au cours de batch rencontré
-
-
-    # Lors du trainning les batch peuvent être non représentatif (par exemple un batch d'une data bizarre)
-    # du coup maintenir des meta data inter batch devient éroner -> par conséquen lors du training on se base sur les
-    # meta data final etablie lors de la phase de training: running_mean, running_var
-    model.eval()  # disable training specific behaviors (e.g., Dropout OFF, BatchNorm inference mode)
-
-    # No need to track gradients during evaluation:
-    # - Gradients are only needed for training (to update weights via backprop)
-    # - Here we just want predictions, not to learn
-    # - Saves memory and speeds up computation
-    #
-    # Link to gradient descent theory:
-    # During evaluation we DO NOT compute:
+    # BatchNorm infere:
     #   ∇_θ L̂(θ) (loss.backward)
     # and we DO NOT apply:
     #   θ ← θ - η ∇_θ L̂(θ) (optim.stem)
@@ -72,7 +57,22 @@ if __name__ == "__main__":
     # Training pipeline inspired by MNIST supervised learning [5]:
     #   Dataset -> DataLoader -> model -> Adam optimizer
     #   -> loss.backward() -> optim.step()
+    #ence mode: permet en mode training de normalise les batch -> sur base d'une moyenne et d'une variante
+    # glissante qui evolue au cours de batch rencontré
+
+
+    # Lors du trainning les batch peuvent être non représentatif (par exemple un batch d'une data bizarre)
+    # du coup maintenir des meta data inter batch devient éroner -> par conséquen lors du training on se base sur les
+    # meta data final etablie lors de la phase de training: running_mean, running_var
+    model.eval()  # disable training specific behaviors (e.g., Dropout OFF, BatchNorm inference mode)
+
+    # No need to track gradients during evaluation:
+    # - Gradients are only needed for training (to update weights via backprop)
+    # - Here we just want predictions, not to learn
+    # - Saves memory and speeds up computation
     #
+    # Link to gradient descent theory:
+    # During evaluation we DO NOT comput
     # Adaptations for Pacman:
     #   1) 80/20 train/test split (from MNIST best practices)
     #   2) Per-epoch evaluation on test set -> on complet session of train and test
