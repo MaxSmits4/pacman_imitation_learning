@@ -122,9 +122,6 @@ class PacmanNetwork(nn.Module):
 
         layers = []
 
-        # ═══════════════════════════════════════════════════════════════════
-        # INPUT LAYER: 23 → 128
-        # ═══════════════════════════════════════════════════════════════════
         # Linear: z = x·W^T + b, where W is [128, 23], b is [128]
         # Creates 128 neurons, each processing all 23 input features
         layers.append(nn.Linear(input_features, hidden_dims[0]))
@@ -143,11 +140,7 @@ class PacmanNetwork(nn.Module):
         # HIDDEN LAYERS: 128 → 64 → 32
         # ═══════════════════════════════════════════════════════════════════
         for i in range(len(hidden_dims) - 1):
-            # Linear(input_dim, output_dim):
-            # - input_dim: number of weights per neuron
-            # - output_dim: number of neurons in this layer
-            # Iteration 0: 128 → 64 (64 neurons, each with 128 weights)
-            # Iteration 1: 64 → 32 (32 neurons, each with 64 weights)
+
             layers.append(nn.Linear(hidden_dims[i], hidden_dims[i + 1]))
 
             # BatchNorm: Normalizes each of the output_dim neurons
@@ -159,93 +152,25 @@ class PacmanNetwork(nn.Module):
             # Dropout
             layers.append(nn.Dropout(dropout))
 
-        # ═══════════════════════════════════════════════════════════════════
-        # OUTPUT LAYER: 32 → 5
-        # ═══════════════════════════════════════════════════════════════════
-        # No BatchNorm, no activation, no Dropout
-        # Outputs raw logits for CrossEntropyLoss
-        # CrossEntropyLoss applies softmax internally
+
         layers.append(nn.Linear(hidden_dims[-1], num_actions))
 
         self.net = nn.Sequential(*layers)
         self.criterion = nn.CrossEntropyLoss()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Forward pass: features → logits
-
-        CONCRETE EXAMPLE (batch_size=3):
-        Input x: [batch=3, features=23]
-          [[0.5, 0.2, ..., 0.8],   ← Game state 1
-           [0.1, 0.9, ..., 0.3],   ← Game state 2
-           [0.7, 0.4, ..., 0.6]]   ← Game state 3
-
-        After Linear(23→128): [3, 128]
-          Each of 3 examples now represented by 128 numbers (neuron activations)
-
-        After BatchNorm: [3, 128]
-          For each of 128 neurons (columns):
-            - Compute mean/std across 3 examples (rows)
-            - Normalize: ẑ = (z - μ) / σ
-            - Re-scale: y = γ·ẑ + β
-
-        After GELU: [3, 128]
-          Applied element-wise, smooth non-linearity
-
-        After Dropout (TRAIN mode): [3, 128]
-          Randomly zeros ~30% of values
-
-        ... (through 128→64→32 layers similarly) ...
-
-        Final output: [3, 5]
-          [[2.1, -0.5, 1.3, 0.2, -1.1],   ← Logits for example 1
-           [1.5,  0.8, -0.3, 2.0, 0.1],   ← Logits for example 2
-           [-0.2, 1.7, 0.5, -1.0, 3.2]]   ← Logits for example 3
-
-        These are RAW LOGITS (not probabilities yet).
-        CrossEntropyLoss will apply softmax internally.
-        """
         return self.net(x)
 
     def loss(self, features: torch.Tensor, actions: torch.Tensor) -> torch.Tensor:
         """
         Compute cross-entropy loss for training
 
-        Args:
+        Arguments:
             features: [batch_size, 23] game states
             actions: [batch_size] ground truth actions (integers 0-4)
 
         Returns:
             Scalar loss value
-
-        FORMULA:
-        For multi-class classification with C classes:
-        L = - (1/N) Σᵢ log(softmax(logitsᵢ)[yᵢ])
-
-        Where:
-        - N = batch size
-        - logitsᵢ = predicted logits for example i
-        - yᵢ = true class label for example i
-        - softmax(z)ⱼ = exp(zⱼ) / Σₖ exp(zₖ)
-
-        CONCRETE EXAMPLE:
-        Predicted logits for example 1: [2.1, -0.5, 1.3, 0.2, -1.1]
-        True action: 0 (go North)
-
-        Softmax:
-        exp([2.1, -0.5, 1.3, 0.2, -1.1]) / sum(exp(.C..))
-        ≈ [0.65, 0.05, 0.29, 0.10, 0.03]
-
-        Loss for this example:
-        -log(0.65) ≈ 0.43
-
-        If prediction was perfect (prob=1.0 for correct class):
-        -log(1.0) = 0 (minimum loss)
-
-        If prediction was terrible (prob=0.01 for correct class):
-        -log(0.01) ≈ 4.6 (high loss)
-
-        The loss measures: "How confident was the model in the CORRECT answer?"
         """
         pred_actions = self.forward(features)
         return self.criterion(pred_actions, actions)

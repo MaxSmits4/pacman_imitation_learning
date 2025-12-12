@@ -1393,58 +1393,55 @@ Interprétation (on cherche le max sur chaque ligne) :
 
 
 Étape 2 — LOSS (mesurer l'erreur)
-Entrées:
-   logits : Matrice (3, 5)
-   y : (3,) = [0, 2, 1]  (actions réelles : NORTH, EAST, SOUTH)
 
-CrossEntropyLoss fait :
-   1. Softmax sur chaque ligne (transforme scores → probabilités)
+   For multi-class classification with C classes:
+   L = - (1/N) Σᵢ log(softmax(logitsᵢ)[yᵢ])
 
-      Pour GameState 0 : logits = [2.1, 0.5, -0.3, 1.8, 0.2]
-      Softmax → probas = [0.42, 0.08, 0.04, 0.31, 0.06]
+   Where:
+   - N = batch size
+   - logitsᵢ = predicted logits for example i
+   - yᵢ = true class label for example i
+   - softmax(z)ⱼ = exp(zⱼ) / Σₖ exp(zₖ)
 
-      Pour GameState 1 : logits = [1.2, -0.5, 2.3, 0.1, -0.8]
-      Softmax → probas = [0.16, 0.03, 0.49, 0.05, 0.02]
+   CONCRETE EXAMPLE:
+   Predicted logits for example 1: [2.1, -0.5, 1.3, 0.2, -1.1]
+   True action: 0 (go North)
 
-      Pour GameState 2 : logits = [0.3, 1.5, 0.7, -1.2, 0.9]
-      Softmax → probas = [0.14, 0.46, 0.21, 0.03, 0.25]
+   Softmax:
+   exp([2.1, -0.5, 1.3, 0.2, -1.1]) / sum(exp(.C..))
+   ≈ [0.65, 0.05, 0.29, 0.10, 0.03]
 
-   2. Prend la proba de la classe correcte
+   Loss for this example:
+   -log(0.65) ≈ 0.43
 
-      GameState 0 : y[0] = 0 (NORTH) → proba = 0.42
-      GameState 1 : y[1] = 2 (EAST)  → proba = 0.49
-      GameState 2 : y[2] = 1 (SOUTH) → proba = 0.46
+   If prediction was perfect (prob=1.0 for correct class):
+   -log(1.0) = 0 (minimum loss)
 
-   3. Fait -log(proba) pour chaque exemple
+   If prediction was terrible (prob=0.01 for correct class):
+   -log(0.01) ≈ 4.6 (high loss)
 
-      GameState 0 : -log(0.42) = 0.87
-      GameState 1 : -log(0.49) = 0.71
-      GameState 2 : -log(0.46) = 0.78
+   The loss measures: "How confident was the model in the CORRECT answer?"
 
-   4. Moyenne sur les 3 exemples
 
-      loss = (0.87 + 0.71 + 0.78) / 3 = 0.79
 
-Sortie:
-   loss = 0.79 (un seul nombre scalaire)
+
 
 Étape 3 — BACKWARD (calculer les gradients)
 
 loss.backward() calcule les gradients de TOUS les paramètres θ:
-
-poids/biais des Linear
-
-γ et β de BatchNorm
-
 ces gradients servent à savoir comment bouger chaque paramètre pour réduire la loss
+
+
 
 Étape 4 — UPDATE (mettre à jour les poids)
 
 optim.step() modifie les paramètres θ pour diminuer la loss
 
-Résumé TRAIN (batch=3):
 
-X (3,23) -> logits (3,5) -> loss (scalaire) -> backward -> update
+
+
+
+
 
 ──────────────────────────────────────────────────────────────────────────────
 BLOC 2 — EVAL (MESURER : accuracy, pas d’apprentissage)
@@ -1456,61 +1453,29 @@ Objectif EVAL : MESURER sans modifier les poids.
 
 model.eval() change le comportement de certains modules:
 
-Dropout:
+   Dropout en eval: il est off
 
-EVAL: OFF (ne met plus rien à 0)
+   BatchNorm:n’utilise plus μ/σ² du batch
 
-BatchNorm:
 
-EVAL: n’utilise plus μ/σ² du batch
+utilise running_mean / running_var appris pendant le training?????????????
 
-utilise running_mean / running_var appris pendant le training
+
 
 Étape 2 — FORWARD SANS GRADIENTS
-Entrée:
+Entrée: X_test : (3, 23)
 
-X_test : (3, 23)
-Sortie:
+Sortie:logits_eval : (3, 5)
 
-logits_eval : (3, 5)
+
 
 Étape 3 — PRÉDICTION
 
-pred = argmax(logits_eval, dim=1)
-Sortie:
+Entrée: _, predicted = torch.max(outputs, dim=1) -selectionne le max qui est la classe prédie
+Sortie: pred : (3,) (un indice d’action par exemele)
 
-pred : (3,) (un indice d’action par exemple)
 
 Étape 4 — ACCURACY
 
-compare pred (3,) avec y_test (3,)
-
 accuracy = nombre de bonnes prédictions / 3
 
-Résumé EVAL (batch=3):
-
-X (3,23) -> logits (3,5) -> pred (3,) -> accuracy
-
-──────────────────────────────────────────────────────────────────────────────
-PHRASE CLÉ : “CE QUE REÇOIT CHAQUE NEURONE”
-──────────────────────────────────────────────────────────────────────────────
-
-Dans Linear(23→128), chaque neurone de sortie j:
-
-reçoit TOUTES les 23 features (la ligne X[i, :])
-
-a ses propres poids w_j (23 nombres) + un biais b_j
-
-calcule un seul nombre z[i, j] = somme_k X[i,k]*w_j[k] + b_j
-
-Avec un batch de 3:
-
-pour chaque neurone j (sur 128), tu obtiens 3 valeurs:
-z[0,j], z[1,j], z[2,j]
-Donc la sortie z de la couche vaut (3,128).
-
-BatchNorm/ReLU(GELU)/Dropout ne “créent pas” de neurones:
-
-ils transforment les valeurs (3,128) élément par élément (ou colonne par colonne pour BN).
-
-──────────────────────────────────────────────────────────────────────────────
