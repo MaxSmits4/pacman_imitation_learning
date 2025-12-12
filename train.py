@@ -1,17 +1,13 @@
 """
 3. train.py - Trains MLP to predict expert actions from game states
 
-Supervised learning pipeline (inspired by MNIST training [5]):
-- Train/test split (80/20) for generalization evaluation
-- Cross-entropy loss for multi-class classification
-- Adam optimizer for efficient convergence [4]
-- Batch processing with DataLoader
-
-    References: see full version in Bibliography.txt
+    References:
     [4] Kingma & Ba (2015) - Adam Optimizer
     [5] LeCun et al. (1998) - MNIST: Train/test split, loss function principles
 """
 
+import random
+import numpy as np
 import torch
 from torch.optim import Adam
 from torch.utils.data import DataLoader, random_split
@@ -19,27 +15,33 @@ from torch.utils.data import DataLoader, random_split
 from architecture import PacmanNetwork
 from data import PacmanDataset
 
+# for reproducibility
+SEED = 42
+random.seed(SEED)
+np.random.seed(SEED)
+torch.manual_seed(SEED)
 
-def model_accuracy(model, loader, device):
+
+def model_accuracy(model, loader):
     """
     Evaluate model accuracy on dataset.
     """
     correct_pred = 0
-    Batch_size = 0
+    nb_action_batch = 0
 
     # START: MNIST inspired §Evaluate the model
+    model.eval()  
+
     with torch.no_grad():
-        for features, actions in loader:
-            features = features.to(device)
-            actions = actions.to(device, dtype=torch.long) # action = expert direction
-            outputs = model(features) # model output predictions: [batch_size, 5] = logits
-            _, predicted = torch.max(outputs, dim=1) # predicted = max in logits vector = direction predicted
-            Batch_size += actions.size(0)  # size(0) = nbr d'elements in the sbatch
-            correct_pred += (predicted == actions).sum().item() #correct_pred = our model prediction vs expert choises
+        for features, actions in loader: #action vector 256 expert actions
+            outputs = model.forward(features)   # FORWARD - Output=logits
+            _, predicted = torch.max(outputs, dim=1)  # max in logits vector = direction predicted
+            nb_action_batch += actions.size(0) # size(0) = nbr d'elements in the batch
+            correct_pred += (predicted == actions).sum().item()  # correct_pred = our model prediction vs expert choices
     # END: MNIST
 
-    model.train() # trainnig mode
-    return correct_pred / Batch_size # = accuracy
+    model.train()  # Retour en training mode
+    return correct_pred / nb_action_batch  # = accuracy
 
  
 if __name__ == "__main__":
@@ -47,21 +49,15 @@ if __name__ == "__main__":
     #   Dataset -> DataLoader -> model -> Adam optimizer
     #   -> loss.backward() -> optim.step()
 
-    # Lors du trainning les batch peuvent être non représentatif (par exemple un batch d'une data bizarre)
-    # du coup maintenir des meta data inter batch devient éroner -> par conséquen lors du training on se base sur les
-    # meta data final etablie lors de la phase de training: running_mean, running_var
-    
-    model.eval()  #evaluation mode (Dropout OFF, BatchNorm μ&σ off)
+    #  80/20 -> 2 DataLoader test & eval
+    #   Test: forward -> loss -> backward ->uptade
+    #   Eval: forward 
 
-    # No need to track gradients during evaluation:
-    # - Gradients are only needed for training (to update weights via backprop)
-    # - Saves memory and speeds up computation
-  
 
     # Hyperparameters
-    batch_size = 256
+    batch_size = 128
     epochs = 150
-    learning_rate = 8e-4  # Slightly higher LR for faster convergence
+    learning_rate = 1e-3  # Slightly higher LR for faster convergence
     # (empirical: large enough to converge quickly, but small enough not to oscillate)
 
     # Load expert demonstrations (Pacman-specific)
@@ -82,13 +78,15 @@ if __name__ == "__main__":
     # END: MNIST
 
     # Initialize model
-    device = "cpu"
-    model = PacmanNetwork().to(device)
+    model = PacmanNetwork()
 
    
     # Adam optimizer = smart version of gradient descent
     # Adam adapts the learning rate for each weight individually.
     # training is faster and more stable.
+    # The parameters of the model are linked to the optimizer. 
+    # This allows the optimizer to keep track of parameters 
+    # that should be updated during training.
     optim = Adam(model.parameters(), lr=learning_rate)
 
 
@@ -108,20 +106,17 @@ if __name__ == "__main__":
         # et mélanger -> pour que chaque batch soit représentatif de tout le data set
         for features, actions in loader_train:
             
-            loss = model.loss(features, actions)
+            loss = model.loss(features, actions) #forward & loss
 
-            # Gradients ACCUMULATE by default in PyTorch.
-            # We need to reset them to zero before computing new gradients.
-            optim.zero_grad()
+            optim.zero_grad() # Gradients ACCUMULATE by default in PyTorch
 
-    
-            loss.backward()
+            loss.backward()# gradients (∂loss/∂θ) for each θ & retroactivly modify every θ 
 
-            optim.step() #θ ← θ - η · (adapted_gradient) 
+            optim.step() #θnew ← θold - LR ∇_θ L̂(θ) = uptade = adam
         # END: MNIST
 
-    
-        test_accuracy = model_accuracy(model, loader_test, device)
+
+        test_accuracy = model_accuracy(model, loader_test)
 
 
     #Vizualisation in terminal:
@@ -131,7 +126,7 @@ if __name__ == "__main__":
             best_accuracy = test_accuracy
             best_epoch = epoch
             # START: MNIST inspired §Save and load module
-            torch.save(model.state_dict(), save_file) # utile ?
+            torch.save(model.state_dict(), save_file) #dict Python containing every parametres
             # END: MNIST
 
     # print Final results in terminal

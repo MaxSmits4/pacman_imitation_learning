@@ -141,7 +141,7 @@ def state_to_tensor(state: object) -> torch.Tensor:
         dist_west / float(maze_W),
         max_two_action,
         # Danger (3)
-        danger_level / 2.0,  # Normalize danger_level to [0, 1] range
+        danger_level / 2.0,  # Normalize danger level to [0, 1] range
         ghost_blocks_food,
         escape_options_ratio,
         # Legal actions (5)
@@ -151,7 +151,6 @@ def state_to_tensor(state: object) -> torch.Tensor:
     return torch.tensor(features, dtype=torch.float32)
 
 def dist_until_wall(x, y, dx, dy, W):
-        """Count free cells in direction (dx, dy) before hitting wall"""
         distance = 0
         while True:
             x += dx
@@ -188,4 +187,4 @@ class PacmanDataset(Dataset):
         return len(self.inputs)
 
     def __getitem__(self, index: int):
-        return self.inputs[index], self.labels[index]
+        return self.inputs[index], torch.tensor(self.labels[index], dtype=torch.long)

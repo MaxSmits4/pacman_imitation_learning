@@ -52,11 +52,11 @@ Exemple concret :
 2. Le réseau fait ses calculs :
    Input (23 nombres)
      ↓
-   Linear → BatchNorm → ReLU → Dropout
+   Linear → BatchNorm → GELU → Dropout
      ↓
-   Linear → BatchNorm → ReLU → Dropout
+   Linear → BatchNorm → GELU → Dropout
      ↓
-   Linear → BatchNorm → ReLU → Dropout
+   Linear → BatchNorm → GELU → Dropout
      ↓
    Linear (dernière couche)
      ↓
@@ -203,22 +203,22 @@ Epoch = 1 passage complet sur tous les exemples (15,018 exemples)
 
 C'est une question importante pour bien comprendre !
 
-Les opérations (Linear, BatchNorm, ReLU, Dropout) ne sont PAS dans les neurones.
+Les opérations (Linear, BatchNorm, GELU, Dropout) ne sont PAS dans les neurones.
 Elles se trouvent ENTRE les couches, dans les CONNEXIONS.
 
 Visualisation :
 
    [Input Layer] ○ ○ ○ (23 neurones)
          |
-         | ← ICI : Linear → BatchNorm → ReLU → Dropout
+         | ← ICI : Linear → BatchNorm → GELU → Dropout
          |
    [Hidden 1]    ○ ○ ○ ... (128 neurones)
          |
-         | ← ICI : Linear → BatchNorm → ReLU → Dropout
+         | ← ICI : Linear → BatchNorm → GELU → Dropout
          |
    [Hidden 2]    ○ ○ ○ ... (64 neurones)
          |
-         | ← ICI : Linear → BatchNorm → ReLU → Dropout
+         | ← ICI : Linear → BatchNorm → GELU → Dropout
          |
    [Hidden 3]    ○ ○ ○ ... (32 neurones)
          |
@@ -261,9 +261,9 @@ Qu'est-ce que fait chaque opération ?
    - Centre autour de 0, variance ~1
    - Stabilise l'entraînement
 
-3. ReLU() :
-   - Applique max(0, x) sur chaque valeur
-   - Les valeurs négatives deviennent 0
+3. GELU() :
+   - Applique une activation gaussienne lisse sur chaque valeur
+   - Les valeurs négatives sont atténuées progressivement (pas coupées)
    - Les valeurs positives restent inchangées
    - Casse la linéarité (permet d'apprendre des fonctions complexes)
 
@@ -273,16 +273,16 @@ Qu'est-ce que fait chaque opération ?
    - Évite l'overfitting (empêche le réseau de mémoriser)
 
 
-Pourquoi on appelle ça "Linear" si on a ReLU (non-linéaire) ?
+Pourquoi on appelle ça "Linear" si on a GELU (non-linéaire) ?
 
 Parce que chaque couche Linear fait une transformation linéaire : y = W @ x + b
-Mais le réseau COMPLET n'est pas linéaire grâce aux ReLU !
+Mais le réseau COMPLET n'est pas linéaire grâce aux GELU !
 
-Sans ReLU : empiler des couches linéaires est inutile
+Sans GELU : empiler des couches linéaires est inutile
    Linear(Linear(x)) = Linear(x)  ← Équivalent à une seule couche !
 
-Avec ReLU : on peut apprendre des fonctions complexes
-   Linear(ReLU(Linear(x))) ≠ Linear(x)  ← Vraiment différent !
+Avec GELU : on peut apprendre des fonctions complexes
+   Linear(GELU(Linear(x))) ≠ Linear(x)  ← Vraiment différent !
 
 
 ÉTAPE 9 : Un neurone, c'est quoi exactement ?
@@ -303,11 +303,11 @@ Exemple avec Linear(23, 128) :
 
 Output : [2.3, -0.7, 1.5, ..., 0.9]  (128 nombres)
 
-Ensuite ces 128 nombres passent par BatchNorm, ReLU, Dropout :
+Ensuite ces 128 nombres passent par BatchNorm, GELU, Dropout :
 
    Après Linear:    [2.3, -0.7, 1.5, ..., 0.9]
    Après BatchNorm: [1.1, -0.3, 0.8, ..., 0.5]  (normalisés)
-   Après ReLU:      [1.1,  0.0, 0.8, ..., 0.5]  (-0.3 → 0)
+   Après GELU:      [1.1,  0.0, 0.8, ..., 0.5]  (-0.3 → 0)
    Après Dropout:   [1.1,  0.0, 0.0, ..., 0.5]  (30% mis à 0)
 
 
@@ -485,7 +485,7 @@ LES 5 FICHIERS PRINCIPAUX
 
 2. architecture.py
    → Définit le cerveau du réseau : 23 → 128 → 64 → 32 → 5
-   → 4 couches cachées avec ReLU et Dropout
+   → 4 couches cachées avec GELU et Dropout
 
 3. train.py
    → Entraîne le réseau sur 150 epochs
@@ -720,9 +720,9 @@ Pour chaque couche cachée, on applique 4 opérations dans l'ordre :
    → Normalise les valeurs (moyenne=0, variance=1)
    → Stabilise l'entraînement
 
-3. ReLU()
-   → Fonction d'activation : f(x) = max(0, x)
-   → Met les valeurs négatives à 0
+3. GELU()
+   → Fonction d'activation : f(x) = x · Φ(x) où Φ est la distribution gaussienne
+   → Atténue les valeurs négatives avec une courbe lisse
    → Casse la linéarité (permet d'apprendre des fonctions complexes)
 
 4. Dropout(0.3)
@@ -730,16 +730,16 @@ Pour chaque couche cachée, on applique 4 opérations dans l'ordre :
    → Évite l'overfitting (empêche le réseau de mémoriser)
 
 
-POURQUOI ReLU ?
+POURQUOI GELU ?
 --------------
 
-ReLU est l'activation standard pour les MLPs :
-- Simple : f(x) = max(0, x)
+GELU est l'activation standard pour les MLPs :
+- Simple : f(x) = x · Φ(x) où Φ est la distribution gaussienne
 - Rapide à calculer
 - Résout le problème du vanishing gradient
 - Permet une convergence rapide
 
-Alternative : GELU (plus smooth), mais ReLU fonctionne très bien ici.
+Alternative : GELU (plus smooth), mais GELU fonctionne très bien ici.
 
 
 POURQUOI BATCHNORM ?
@@ -776,7 +776,7 @@ Valeur optimale : 0.3 (testé empiriquement)
 PAS D'ACTIVATION SUR LA DERNIÈRE COUCHE
 ---------------------------------------
 
-La dernière couche est juste Linear(32, 5), sans ReLU.
+La dernière couche est juste Linear(32, 5), sans GELU.
 
 Pourquoi ?
 - On veut des valeurs brutes (logits) : [-2.1, 0.5, 3.2, 1.0, -0.3]
@@ -793,19 +793,19 @@ def __init__(self):
     # Couche 1 : 23 → 128
     layers.append(nn.Linear(23, 128))
     layers.append(nn.BatchNorm1d(128))
-    layers.append(nn.ReLU())
+    layers.append(nn.GELU())
     layers.append(nn.Dropout(0.3))
 
     # Couche 2 : 128 → 64
     layers.append(nn.Linear(128, 64))
     layers.append(nn.BatchNorm1d(64))
-    layers.append(nn.ReLU())
+    layers.append(nn.GELU())
     layers.append(nn.Dropout(0.3))
 
     # Couche 3 : 64 → 32
     layers.append(nn.Linear(64, 32))
     layers.append(nn.BatchNorm1d(32))
-    layers.append(nn.ReLU())
+    layers.append(nn.GELU())
     layers.append(nn.Dropout(0.3))
 
     # Couche de sortie : 32 → 5
@@ -889,14 +889,6 @@ Pourquoi Adam ?
 - Converge plus vite que Gradient Descent classique
 - Plus stable (moins de variations)
 
-Comment ça marche ?
-1. Calcule la moyenne des gradients récents (momentum)
-2. Calcule la variance des gradients récents
-3. Ajuste le learning rate selon ces statistiques
-
-Résultat :
-- GRANDS pas quand le gradient est stable et fort (on est loin du minimum)
-- PETITS pas quand le gradient est instable ou faible (on est proche du minimum)
 
 
 BOUCLE D'ENTRAÎNEMENT COMPLÈTE
@@ -1128,12 +1120,12 @@ R: Les réseaux de neurones convergent mieux quand toutes les features
    Avec normalisation, tout est ~[0, 1] et le réseau apprend bien mieux.
 
 
-Q: Pourquoi ReLU au lieu de GELU ?
+Q: Pourquoi GELU au lieu de GELU ?
 -----------------------------------
-R: ReLU est plus simple et rapide : f(x) = max(0, x)
-   GELU est plus smooth (gradients plus fluides), mais ReLU fonctionne
+R: GELU est plus simple et rapide : f(x) = x · Φ(x) où Φ est la distribution gaussienne
+   GELU est plus smooth (gradients plus fluides), mais GELU fonctionne
    très bien pour ce problème et converge rapidement.
-   ReLU est l'activation standard dans les MLPs classiques.
+   GELU est l'activation standard dans les MLPs classiques.
 
 
 Q: Pourquoi BatchNorm ?
@@ -1334,8 +1326,8 @@ BatchNorm1d(128) : (3, 128) -> (3, 128)
       μ[1] = (-0.7 + 1.2 + 0.5) / 3 = 0.33
       σ²[1] = variance([-0.7, 1.2, 0.5]) = 0.82
 
-   Donc : μ = [0.70, 0.33, 1.07, ...128 valeurs] (un μ par neurone)
-          σ² = [2.45, 0.82, 0.55, ...128 valeurs] (un σ² par neurone)
+   Donc : μ =vecteur = [0.70, 0.33, 1.07, ...128 valeurs] (un μ par neurone)
+          σ² =vecteur = [2.45, 0.82, 0.55, ...128 valeurs] (un σ² par neurone)
 
    Normalisation de CHAQUE colonne (neurone) :
       Pour chaque neurone Hj, on normalise ses 3 valeurs avec μ[j] et σ²[j]
@@ -1343,15 +1335,15 @@ BatchNorm1d(128) : (3, 128) -> (3, 128)
    Puis rééchelonnage : z_final = γ * z_norm + β
 
    APRÈS BatchNorm (normalisé + rééchelonné) :
-                 h0         h1         h2         h3         ...  h127
-                 ↓          ↓          ↓          ↓          ...  ↓
+                     h0        h1          h2        h3          ... h127
+                     ↓          ↓          ↓          ↓          ...  ↓
    GameState 0  →   [1.2,      -0.5,      0.8,       0.1,    ...     0.9]
    GameState 1  →   [0.1,       0.9,     -0.2,       0.5,    ...     0.3]
    GameState 2  →   [-1.3,      0.3,      1.4,      -0.6,    ...     0.7]
 
 
-RueLU : (3, 128) -> (3, 128)
-   Applique max(0, x) sur CHAQUE nerone, pour CHAQUE exemple
+GELU : (3, 128) -> (3, 128)
+   Applique GELU(x) = x · Φ(x) sur CHAQUE neurone, pour CHAQUE exemple
 
                  neurone 0  neurone 1  neurone 2  neurone 3  ...
                      ↓          ↓          ↓          ↓
@@ -1377,7 +1369,6 @@ Dropout(0.3) : (3, 128) -> (3, 128)
 
 Sortie Linear(32→5) : (3, 32) -> (3, 5)
    On passe de 32 neurones à 5 neurones de sortie (les 5 actions)
-
    logits = matrice (3, 5)
 
                   NORTH    SOUTH    EAST     WEST     STOP
@@ -1433,9 +1424,18 @@ ces gradients servent à savoir comment bouger chaque paramètre pour réduire l
 
 
 
-Étape 4 — UPDATE (mettre à jour les poids)
+Étape 4 — UPDATE (mettre à jour les poids) = ADAM 
 
 optim.step() modifie les paramètres θ pour diminuer la loss
+
+   Comment ça marche ?
+   1. Calcule la moyenne des gradients récents (momentum)
+   2. Calcule la variance des gradients récents
+   3. Ajuste le learning rate selon ces statistiques
+
+   Résultat :
+   - GRANDS pas quand le gradient est stable et fort (on est loin du minimum)
+   - PETITS pas quand le gradient est instable ou faible (on est proche du minimum)
 
 
 
@@ -1455,27 +1455,19 @@ model.eval() change le comportement de certains modules:
 
    Dropout en eval: il est off
 
-   BatchNorm:n’utilise plus μ/σ² du batch
-
-
-utilise running_mean / running_var appris pendant le training?????????????
-
+   BatchNorm:n’utilise plus μ/σ² du batch pour un neuronne 
 
 
 Étape 2 — FORWARD SANS GRADIENTS
-Entrée: X_test : (3, 23)
-
-Sortie:logits_eval : (3, 5)
-
+   outputs = model.forward(features)   # FORWARD - Output=logits
 
 
 Étape 3 — PRÉDICTION
 
-Entrée: _, predicted = torch.max(outputs, dim=1) -selectionne le max qui est la classe prédie
-Sortie: pred : (3,) (un indice d’action par exemele)
+_, predicted = torch.max(outputs, dim=1) 
+   Regarde le max ds logits c'est la direction prédie
 
 
 Étape 4 — ACCURACY
 
 accuracy = nombre de bonnes prédictions / 3
-

@@ -9,8 +9,6 @@ from pacman_module.ghostAgents import SmartyGhost
 from architecture import PacmanNetwork
 from pacmanagent import PacmanAgent
 
-torch.cuda.empty_cache()
-
 SEED = 42
 random.seed(SEED)
 np.random.seed(SEED)
@@ -18,13 +16,8 @@ torch.manual_seed(SEED)
 
 path_to_saved_model = "pacman_model.pth"
 
-# device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-device = "cpu"
-
-model = PacmanNetwork().to(device)
-state_dict = torch.load(
-    path_to_saved_model, map_location=device, weights_only=True
-)
+model = PacmanNetwork()
+state_dict = torch.load(path_to_saved_model, weights_only=True)
 model.load_state_dict(state_dict)
 model.eval()
 

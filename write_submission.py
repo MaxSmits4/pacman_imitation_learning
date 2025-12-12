@@ -62,8 +62,8 @@ class SubmissionWriter:
 
 if __name__ == "__main__":
     writer = SubmissionWriter(
-        test_set_path="pacman_test.pkl",
-        model_path="pacman_model.pth"  # change if needed
+    test_set_path="datasets/pacman_test.pkl",
+    model_path="pacman_model.pth"
     )
     predictions = writer.predict_on_testset()
     writer.write_csv(predictions)
