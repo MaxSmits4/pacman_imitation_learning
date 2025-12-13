@@ -25,13 +25,21 @@ class PacmanAgent(Agent):
         super().__init__()
         self.model = model
         self.model.eval()  # Disable dropout/batchnorm
+        self.action_history = []
+
+    def registerInitialState(self, state):
+        """
+        Called at the start of each game by the engine.
+        Reset the action history so memory does not leak between games.
+        """
+        self.action_history = []
 
     def get_action(self, state):
         """
         Predict best legal action for current game state.
 
         Process:
-        1. Convert GameState to 23 features
+        1. Convert GameState to 32 features
         2. Forward pass through network
         3. Return highest-scoring legal action
 
@@ -44,7 +52,7 @@ class PacmanAgent(Agent):
         # Get legal moves (walls block some directions)
         legal_actions = state.getLegalPacmanActions()
 
-        # Convert state to tensor (23 features)
+        # Convert state to tensor (32 features)
         x = state_to_tensor(state).unsqueeze(0)  # Add batch dimension
 
         # Predict action probabilities
@@ -57,7 +65,9 @@ class PacmanAgent(Agent):
         for i in sorted_indices:
             action = INDEX_TO_ACTION[i]
             if action in legal_actions:
+                # Update memory with chosen action for next state
+                self.action_history.append(action)
+                self.action_history = self.action_history[-5:]
                 return action
 
         return Directions.STOP  # Fallback
-

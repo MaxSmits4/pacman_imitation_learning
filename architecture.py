@@ -10,13 +10,13 @@ class PacmanNetwork(nn.Module):
     """
     MLP for predicting Pacman actions from game state.
 
-    Full architecture: 23 → [128 → 64 → 32] → 5
+    Full architecture: 32 → [128 → 64 → 32] → 5
     Each hidden layer uses: Linear → BatchNorm → GELU → Dropout
     """
 
     def __init__(
         self,
-        input_features=23,
+        input_features=32,
         num_actions=5,
         hidden_dims=[128, 64, 32],
         activation=nn.GELU(),
@@ -62,7 +62,7 @@ class PacmanNetwork(nn.Module):
         Compute cross-entropy loss for training
 
         Arguments:
-            features: [batch_size, 23] game states
+            features: [batch_size, 32] game states
             actions: [batch_size] ground truth actions (integers 0-4)
 
         Returns:

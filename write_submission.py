@@ -1,6 +1,5 @@
 import pickle
 import torch
-import pandas as pd
 
 from data import state_to_tensor, INDEX_TO_ACTION
 from architecture import PacmanNetwork
@@ -50,14 +49,10 @@ class SubmissionWriter:
         to a CSV file.
 
         """
-        submission = pd.DataFrame(
-            data={
-                'ACTION': actions,
-            },
-            columns=["ACTION"]
-        )
-
-        submission.to_csv(file_name + ".csv", index=False)
+        with open(file_name + ".csv", "w") as f:
+            f.write("ACTION\n")  # Header
+            for action in actions:
+                f.write(f"{action}\n")
 
 
 if __name__ == "__main__":

@@ -80,12 +80,12 @@ if __name__ == "__main__":
     # Initialize model
     model = PacmanNetwork()
 
-   
+
     # Adam optimizer = smart version of gradient descent
     # Adam adapts the learning rate for each weight individually.
     # training is faster and more stable.
-    # The parameters of the model are linked to the optimizer. 
-    # This allows the optimizer to keep track of parameters 
+    # The parameters of the model are linked to the optimizer.
+    # This allows the optimizer to keep track of parameters
     # that should be updated during training.
     optim = Adam(model.parameters(), lr=learning_rate)
 
